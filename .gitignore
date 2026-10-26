@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+build/
+
+# Env (never commit keys — PRD §11 MODEL_API_KEY)
+.env*.local
+.env
+
+# Logs / OS
+*.log
+.DS_Store
+
+# TypeScript / Next.js generated
+*.tsbuildinfo
+next-env.d.ts
+
+# Demo / pipeline artifacts (PRD §8 — local only)
+tmp/
+.gridsight/
+
+# Private planning docs (PRD + phased plan stay local, not for submission repo)
+specs/
+.orchestrator/

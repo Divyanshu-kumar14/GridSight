@@ -1,0 +1,48 @@
+{
+  "id": "rep-demo",
+  "sessionId": "demo",
+  "inspection": {
+    "substationId": "sub-demo",
+    "substationName": "East Bus Substation",
+    "date": "2026-10-27T00:00:00.000Z",
+    "inspector": "Carlos Mendez",
+    "totalAssetsTracked": 6,
+    "totalDefectsFound": 2,
+    "coveragePercent": 83
+  },
+  "summary": "Two issues need attention at East Bus Substation: corrosion on the third east-bus insulator requires prompt repair, and transformer T4 shows low oil to check at the next visit. Remaining tracked assets show no reported defects.",
+  "defects": [
+    {
+      "id": "def-001",
+      "assetId": "insulator-003",
+      "assetCategory": "insulator",
+      "severity": "CRITICAL",
+      "title": "Corrosion on east bus insulator #3",
+      "description": "Visible corrosion near the cap of the third insulator on the east bus, observed across frames 360-540.",
+      "frameTimestamp": 15,
+      "voiceNoteExcerpt": "The third insulator on the east bus has visible corrosion near the cap",
+      "recommendedAction": "Schedule replacement of insulator-003 within 30 days; treat as arc-flash risk until remediated.",
+      "estimatedUrgency": "Immediate"
+    },
+    {
+      "id": "def-002",
+      "assetId": "transformer-001",
+      "assetCategory": "transformer",
+      "severity": "MEDIUM",
+      "title": "Low oil level on transformer T4",
+      "description": "Inspector reports low oil level on transformer T4; no visual leak confirmed in tracked frames.",
+      "frameTimestamp": 22,
+      "voiceNoteExcerpt": "Transformer T4 oil level looks low, marking for follow-up next visit",
+      "recommendedAction": "Verify oil level with gauge at next scheduled maintenance; top up if below threshold.",
+      "estimatedUrgency": "Next scheduled"
+    }
+  ],
+  "statistics": {
+    "critical": 1,
+    "high": 0,
+    "medium": 1,
+    "low": 0,
+    "byCategory": { "insulator": 1, "transformer": 1 }
+  },
+  "generatedAt": "2026-10-27T00:00:00.000Z"
+}

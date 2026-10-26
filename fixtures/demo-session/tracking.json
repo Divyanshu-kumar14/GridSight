@@ -1,0 +1,85 @@
+[
+  {
+    "id": "insulator-001",
+    "sessionId": "demo",
+    "category": "insulator",
+    "color": "#FF6B6B",
+    "firstSeenFrame": 360,
+    "lastSeenFrame": 540,
+    "totalFrameCount": 3,
+    "frames": [
+      { "frameIndex": 360, "timestamp": 12, "bbox": { "x": 0.2, "y": 0.3, "w": 0.08, "h": 0.12 }, "confidence": 1 },
+      { "frameIndex": 450, "timestamp": 15, "bbox": { "x": 0.21, "y": 0.31, "w": 0.08, "h": 0.12 }, "confidence": 1 },
+      { "frameIndex": 540, "timestamp": 18, "bbox": { "x": 0.22, "y": 0.3, "w": 0.08, "h": 0.12 }, "confidence": 1 }
+    ]
+  },
+  {
+    "id": "insulator-002",
+    "sessionId": "demo",
+    "category": "insulator",
+    "color": "#4ECDC4",
+    "firstSeenFrame": 360,
+    "lastSeenFrame": 540,
+    "totalFrameCount": 3,
+    "frames": [
+      { "frameIndex": 360, "timestamp": 12, "bbox": { "x": 0.32, "y": 0.3, "w": 0.08, "h": 0.12 }, "confidence": 1 },
+      { "frameIndex": 450, "timestamp": 15, "bbox": { "x": 0.33, "y": 0.31, "w": 0.08, "h": 0.12 }, "confidence": 1 },
+      { "frameIndex": 540, "timestamp": 18, "bbox": { "x": 0.34, "y": 0.3, "w": 0.08, "h": 0.12 }, "confidence": 1 }
+    ]
+  },
+  {
+    "id": "insulator-003",
+    "sessionId": "demo",
+    "category": "insulator",
+    "color": "#FFD93D",
+    "firstSeenFrame": 360,
+    "lastSeenFrame": 540,
+    "totalFrameCount": 3,
+    "frames": [
+      { "frameIndex": 360, "timestamp": 12, "bbox": { "x": 0.44, "y": 0.3, "w": 0.08, "h": 0.12 }, "confidence": 1 },
+      { "frameIndex": 450, "timestamp": 15, "bbox": { "x": 0.45, "y": 0.31, "w": 0.08, "h": 0.12 }, "confidence": 1 },
+      { "frameIndex": 540, "timestamp": 18, "bbox": { "x": 0.46, "y": 0.3, "w": 0.08, "h": 0.12 }, "confidence": 1 }
+    ]
+  },
+  {
+    "id": "transformer-001",
+    "sessionId": "demo",
+    "category": "transformer",
+    "color": "#6BCB77",
+    "firstSeenFrame": 570,
+    "lastSeenFrame": 750,
+    "totalFrameCount": 3,
+    "frames": [
+      { "frameIndex": 570, "timestamp": 19, "bbox": { "x": 0.55, "y": 0.4, "w": 0.2, "h": 0.25 }, "confidence": 1 },
+      { "frameIndex": 660, "timestamp": 22, "bbox": { "x": 0.56, "y": 0.41, "w": 0.2, "h": 0.25 }, "confidence": 1 },
+      { "frameIndex": 750, "timestamp": 25, "bbox": { "x": 0.57, "y": 0.4, "w": 0.2, "h": 0.25 }, "confidence": 1 }
+    ]
+  },
+  {
+    "id": "connector-001",
+    "sessionId": "demo",
+    "category": "connector",
+    "color": "#4D96FF",
+    "firstSeenFrame": 930,
+    "lastSeenFrame": 1110,
+    "totalFrameCount": 3,
+    "frames": [
+      { "frameIndex": 930, "timestamp": 31, "bbox": { "x": 0.62, "y": 0.25, "w": 0.06, "h": 0.08 }, "confidence": 1 },
+      { "frameIndex": 1020, "timestamp": 34, "bbox": { "x": 0.63, "y": 0.26, "w": 0.06, "h": 0.08 }, "confidence": 1 },
+      { "frameIndex": 1110, "timestamp": 37, "bbox": { "x": 0.64, "y": 0.25, "w": 0.06, "h": 0.08 }, "confidence": 1 }
+    ]
+  },
+  {
+    "id": "busbar-001",
+    "sessionId": "demo",
+    "category": "busbar",
+    "color": "#FF9F45",
+    "firstSeenFrame": 150,
+    "lastSeenFrame": 1200,
+    "totalFrameCount": 2,
+    "frames": [
+      { "frameIndex": 150, "timestamp": 5, "bbox": { "x": 0.1, "y": 0.5, "w": 0.7, "h": 0.05 }, "confidence": 1 },
+      { "frameIndex": 1200, "timestamp": 40, "bbox": { "x": 0.1, "y": 0.51, "w": 0.7, "h": 0.05 }, "confidence": 1 }
+    ]
+  }
+]

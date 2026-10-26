@@ -1,0 +1,22 @@
+{
+  "segments": [
+    {
+      "speaker": "SPEAKER_0",
+      "start": 12.4,
+      "end": 18.2,
+      "text": "The third insulator on the east bus has visible corrosion near the cap"
+    },
+    {
+      "speaker": "SPEAKER_0",
+      "start": 19.0,
+      "end": 24.5,
+      "text": "Transformer T4 oil level looks low, marking for follow-up next visit"
+    },
+    {
+      "speaker": "SPEAKER_1",
+      "start": 31.0,
+      "end": 36.8,
+      "text": "Connector on the north string shows heat discoloration, recommend thermal check"
+    }
+  ]
+}

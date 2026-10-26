@@ -1,0 +1,35 @@
+[
+  {
+    "segmentId": "demo-seg-000",
+    "text": "The third insulator on the east bus has visible corrosion near the cap",
+    "speaker": "SPEAKER_0",
+    "startTime": 12.4,
+    "endTime": 18.2,
+    "matchedAssetId": "insulator-003",
+    "matchedCategory": "insulator",
+    "matchConfidence": 0.9,
+    "matchReason": "Mentions \"insulator\" and timestamps overlap its visible range"
+  },
+  {
+    "segmentId": "demo-seg-001",
+    "text": "Transformer T4 oil level looks low, marking for follow-up next visit",
+    "speaker": "SPEAKER_0",
+    "startTime": 19.0,
+    "endTime": 24.5,
+    "matchedAssetId": "transformer-001",
+    "matchedCategory": "transformer",
+    "matchConfidence": 0.9,
+    "matchReason": "Mentions \"transformer\" and timestamps overlap its visible range"
+  },
+  {
+    "segmentId": "demo-seg-002",
+    "text": "Connector on the north string shows heat discoloration, recommend thermal check",
+    "speaker": "SPEAKER_1",
+    "startTime": 31.0,
+    "endTime": 36.8,
+    "matchedAssetId": "connector-001",
+    "matchedCategory": "connector",
+    "matchConfidence": 0.9,
+    "matchReason": "Mentions \"connector\" and timestamps overlap its visible range"
+  }
+]
