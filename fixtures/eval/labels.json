@@ -1,0 +1,205 @@
+{
+  "sourceClip": "fixtures/eval/source.mp4",
+  "frames": [
+    {
+      "id": "f001",
+      "timestamp": 0,
+      "truth": []
+    },
+    {
+      "id": "f002",
+      "timestamp": 1,
+      "truth": []
+    },
+    {
+      "id": "f003",
+      "timestamp": 2,
+      "truth": []
+    },
+    {
+      "id": "f004",
+      "timestamp": 3,
+      "truth": []
+    },
+    {
+      "id": "f005",
+      "timestamp": 4,
+      "truth": []
+    },
+    {
+      "id": "f006",
+      "timestamp": 5,
+      "truth": []
+    },
+    {
+      "id": "f007",
+      "timestamp": 6,
+      "truth": []
+    },
+    {
+      "id": "f008",
+      "timestamp": 7,
+      "truth": []
+    },
+    {
+      "id": "f009",
+      "timestamp": 8,
+      "truth": []
+    },
+    {
+      "id": "f010",
+      "timestamp": 9,
+      "truth": []
+    },
+    {
+      "id": "f011",
+      "timestamp": 10,
+      "truth": []
+    },
+    {
+      "id": "f012",
+      "timestamp": 11,
+      "truth": []
+    },
+    {
+      "id": "f013",
+      "timestamp": 12,
+      "truth": []
+    },
+    {
+      "id": "f014",
+      "timestamp": 13,
+      "truth": []
+    },
+    {
+      "id": "f015",
+      "timestamp": 14,
+      "truth": []
+    },
+    {
+      "id": "f016",
+      "timestamp": 15,
+      "truth": []
+    },
+    {
+      "id": "f017",
+      "timestamp": 16,
+      "truth": []
+    },
+    {
+      "id": "f018",
+      "timestamp": 17,
+      "truth": []
+    },
+    {
+      "id": "f019",
+      "timestamp": 18,
+      "truth": []
+    },
+    {
+      "id": "f020",
+      "timestamp": 19,
+      "truth": []
+    },
+    {
+      "id": "f021",
+      "timestamp": 20,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f022",
+      "timestamp": 21,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f023",
+      "timestamp": 22,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f024",
+      "timestamp": 23,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f025",
+      "timestamp": 24,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f026",
+      "timestamp": 25,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f027",
+      "timestamp": 26,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f028",
+      "timestamp": 27,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f029",
+      "timestamp": 28,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    },
+    {
+      "id": "f030",
+      "timestamp": 29,
+      "truth": [
+        {
+          "category": "pole",
+          "defect": "rust"
+        }
+      ]
+    }
+  ]
+}

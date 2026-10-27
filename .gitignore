@@ -22,6 +22,12 @@ next-env.d.ts
 tmp/
 .gridsight/
 
+# Eval working material: extracted frames + per-frame model-response cache.
+# labels.json IS committed (ground truth); the clip is rebuildable (see scripts/eval.ts).
+fixtures/eval/frames/
+fixtures/eval/cache/
+fixtures/eval/source.mp4
+
 # Private planning docs (PRD + phased plan stay local, not for submission repo)
 specs/
 .orchestrator/
