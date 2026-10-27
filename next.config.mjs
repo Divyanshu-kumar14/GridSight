@@ -1,4 +1,7 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  // Standalone build for the Docker image (serverless can't run ffmpeg/sqlite/scratch).
+  output: "standalone",
+};
 
 export default nextConfig;
