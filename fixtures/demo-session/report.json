@@ -18,11 +18,12 @@
       "assetCategory": "insulator",
       "severity": "CRITICAL",
       "title": "Corrosion on east bus insulator #3",
-      "description": "Visible corrosion near the cap of the third insulator on the east bus, observed across frames 360-540.",
+      "description": "Inspector reports visible corrosion near the cap of the third insulator on the east bus. No key frame in this sample confirms it visually — treat as unverified voice report.",
       "frameTimestamp": 15,
       "voiceNoteExcerpt": "The third insulator on the east bus has visible corrosion near the cap",
       "recommendedAction": "Schedule replacement of insulator-003 within 30 days; treat as arc-flash risk until remediated.",
-      "estimatedUrgency": "Immediate"
+      "estimatedUrgency": "Immediate",
+      "evidenceSource": "voice"
     },
     {
       "id": "def-002",
@@ -34,7 +35,8 @@
       "frameTimestamp": 22,
       "voiceNoteExcerpt": "Transformer T4 oil level looks low, marking for follow-up next visit",
       "recommendedAction": "Verify oil level with gauge at next scheduled maintenance; top up if below threshold.",
-      "estimatedUrgency": "Next scheduled"
+      "estimatedUrgency": "Next scheduled",
+      "evidenceSource": "voice"
     }
   ],
   "statistics": {

@@ -105,10 +105,15 @@ export interface Defect {
   description: string;
   frameTimestamp: number; // seconds into video
   frameCapture?: string; // base64
-  annotatedImage?: string; // base64 from Muse Image
+  annotatedImage?: string; // base64 from Muse Image (legacy; render only as labeled illustration)
   voiceNoteExcerpt?: string;
   recommendedAction: string;
   estimatedUrgency: "Immediate" | "Next scheduled" | "Monitor";
+  // Visual-evidence fields (model-cited, server-verified — see labelEvidence).
+  evidenceFrameIndex?: number; // index into the report's key-frame array
+  observation?: string; // what is actually visible in the cited frame
+  evidenceSource?: "visual" | "voice"; // SERVER-COMPUTED, never trusted from the model
+  overlayBox?: BoundingBox; // SERVER-COMPUTED tracked bbox at defect time (deterministic overlay)
 }
 
 export interface ReportStatistics {

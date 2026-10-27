@@ -2,13 +2,15 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getMetaClient } from "@/lib/meta-client";
+import { SPARK_MODEL } from "@/lib/models";
 import { extractFrame } from "@/lib/ffmpeg";
-import { annotateDefects, selectAnnotatable } from "@/lib/images";
 import {
   MAX_KEY_FRAMES,
   REPORT_SYSTEM_PROMPT,
   attachFrameCaptures,
+  attachOverlayBox,
   coveragePercent,
+  labelEvidence,
   pickKeyTimestamps,
   rollupStats,
   sortDefects,
@@ -31,7 +33,12 @@ import {
 } from "@/lib/store";
 
 // POST /api/generate-report — { sessionId } → SSE:
-// report_started | defect_found (×N) | image_generating | report_complete.
+// report_started | defect_found (×N) | report_complete.
+// 200-stream · 400 nothing to report · 404 session · 502 Spark failure (no fabricated fallback).
+// Key frames are sent to Spark as images (visual ground truth); with no frames
+// (ffmpeg missing / no video) the call degrades to text-only, exactly as before.
+// Muse Image annotation is OFF the critical path (it can invent damage); the UI
+// renders deterministic bbox overlays instead. images.ts stays for tests/optional use.
 // 200-stream · 400 nothing to report · 404 session · 502 Spark failure (no fabricated fallback).
 // GET ?sessionId= → stored report JSON (memory, else scratch file) · 404 if absent.
 // USE_CACHED=true → scratch JSON if captured, else golden dataset. Zero burn.
@@ -117,32 +124,51 @@ export async function POST(req: Request): Promise<Response> {
         }
 
         const client = getMetaClient();
+        // Vision message: metadata text first (field names kept), then one
+        // FRAME i text marker + image part per key frame, in order. The model
+        // cites evidence with evidenceFrameIndex into this same order.
+        const userParts: (
+          | { type: "text"; text: string }
+          | { type: "image_url"; image_url: { url: string } }
+        )[] = [
+          {
+            type: "text",
+            text: JSON.stringify({
+              frames_attached: frames.length,
+              frame_note:
+                "The attached key frames FRAME 0..N are the visual ground truth, in order. Cite visual claims with evidenceFrameIndex.",
+              tracked_assets: objects.map((o) => ({
+                id: o.id,
+                category: o.category,
+                firstSeen: o.frames[0]?.timestamp ?? 0,
+                lastSeen: o.frames[o.frames.length - 1]?.timestamp ?? 0,
+                frameCount: o.totalFrameCount,
+              })),
+              tagged_notes: tagged,
+              voice_transcript: transcript,
+              key_frame_timestamps: frames.map((f) => f.timestamp),
+              inspection_metadata: {
+                substation: session.substationName,
+                date: session.date,
+                inspector: session.inspectorName,
+              },
+            }),
+          },
+        ];
+        frames.forEach((f, i) => {
+          userParts.push({ type: "text", text: `FRAME ${i} @ t=${f.timestamp.toFixed(2)}s` });
+          userParts.push({
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${f.base64}` },
+          });
+        });
         const res = await client.chat.completions.create({
-          model: "muse-spark-1.3",
+          model: SPARK_MODEL,
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: REPORT_SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: JSON.stringify({
-                tracked_assets: objects.map((o) => ({
-                  id: o.id,
-                  category: o.category,
-                  firstSeen: o.frames[0]?.timestamp ?? 0,
-                  lastSeen: o.frames[o.frames.length - 1]?.timestamp ?? 0,
-                  frameCount: o.totalFrameCount,
-                })),
-                tagged_notes: tagged,
-                voice_transcript: transcript,
-                key_frame_timestamps: frames.map((f) => f.timestamp),
-                inspection_metadata: {
-                  substation: session.substationName,
-                  date: session.date,
-                  inspector: session.inspectorName,
-                },
-              }),
-            },
+            { role: "user", content: userParts },
           ],
         });
         const text = res.choices[0]?.message?.content ?? "";
@@ -152,14 +178,21 @@ export async function POST(req: Request): Promise<Response> {
         const now = new Date().toISOString();
         // Envelope-tolerant: models often return just {summary, defects} (or a bare
         // array) and drop the inspection/statistics envelope. Validate the defects —
-        // the part that matters — and build the envelope server-side, always.
+        // the part that matters — then label evidence server-side (never trust the
+        // model for it), pin visual defects to their cited frame, attach nearest
+        // captures for the rest, add deterministic bbox overlays, and sort.
         const rawObj =
           typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
         const summary =
           typeof rawObj.summary === "string" && rawObj.summary ? rawObj.summary : "Inspection complete. See defects below.";
-        const defects = attachFrameCaptures(
-          sortDefects(validateDefects("defects" in rawObj ? rawObj : raw)),
-          frames,
+        const defects = sortDefects(
+          attachOverlayBox(
+            attachFrameCaptures(
+              labelEvidence(validateDefects("defects" in rawObj ? rawObj : raw), frames),
+              frames,
+            ),
+            objects,
+          ),
         );
         updateJobProgress(job.id, 50, 100);
 
@@ -174,32 +207,10 @@ export async function POST(req: Request): Promise<Response> {
           });
         }
 
-        // Annotated visuals: Muse Image edits on key frames (cap 5, skip-safe).
-        const targets = selectAnnotatable(defects);
-        send("image_generating", { started: true, total: targets.length });
-        const editFn = async (frameBase64: string, prompt: string): Promise<string | null> => {
-          const imgFile = new File(
-            [new Uint8Array(Buffer.from(frameBase64, "base64"))],
-            "frame.jpg",
-            { type: "image/jpeg" },
-          );
-          const out = await client.images.edit({
-            model: "muse-image-1.0",
-            image: imgFile,
-            prompt,
-          } as never);
-          const b64 = (out as unknown as { data?: { b64_json?: string }[] }).data?.[0]?.b64_json;
-          return b64 ?? null;
-        };
-        const finalDefects = await annotateDefects(defects, async (frame, prompt) => {
-          try {
-            return await editFn(frame, prompt);
-          } catch (e) {
-            console.error("annotation skipped:", e instanceof Error ? e.message : e);
-            return null;
-          }
-        });
-        send("image_generating", { started: false, total: targets.length });
+        // No generative annotation on the critical path: Muse Image edits can
+        // invent damage on a clean frame, unacceptable in a safety context.
+        // Defects render with their real key frame + deterministic bbox overlay.
+        const finalDefects = defects;
 
         const report: DefectReport = {
           id: `rep-${sessionId.slice(0, 8)}`,

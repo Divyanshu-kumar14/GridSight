@@ -11,19 +11,14 @@ import type {
 // Normal: Spark JSON → validated → severity-sorted → stats recomputed → frames attached.
 // Empty: zero defects → valid report with zero stats. Invalid: schema mismatch → throws.
 
-export const REPORT_SYSTEM_PROMPT = `You are GridSight's inspection analyst. You receive:
-1. All tracked assets from SAM 3.1 (objects with their frame appearances)
-2. Asset-tagged voice notes from the inspector
-3. Inspection metadata (substation, date, inspector)
+export const REPORT_SYSTEM_PROMPT = `You are GridSight's inspection analyst. You receive ATTACHED KEY FRAMES FIRST — they are the visual ground truth, in order FRAME 0..N with timestamps. Inspection metadata follows the frames.
 
-Generate a comprehensive defect report. For each potential defect:
-- Analyze the visual tracking data for anomalies (objects appearing/disappearing, unusual positions)
-- Cross-reference with the inspector's voice notes for context
-- Classify severity: CRITICAL (immediate safety risk), HIGH (degraded, schedule repair), MEDIUM (monitor closely), LOW (cosmetic/minor)
-- Provide a specific recommended action
-- Estimate urgency: "Immediate", "Next scheduled maintenance", "Monitor"
-
-Output valid JSON matching the DefectReport schema. Be specific, technical, and actionable. Do not hallucinate defects — only report what the tracking data and voice notes support.`;
+For each defect, output the standard fields (id, assetId, assetCategory, severity, title, description, frameTimestamp, recommendedAction, estimatedUrgency, voiceNoteExcerpt when an inspector note supports it).
+Evidence rules (no exceptions):
+- If the claim is VISUAL (damage, corrosion, deformation, leak, crack seen in a frame): you MUST set observation (what is concretely visible, not inferred) AND evidenceFrameIndex (the index of the attached frame that shows it).
+- Never describe anything as visible unless one of the attached frames supports it. Cite the exact frame.
+- If no attached frame supports the claim (the inspector said it, or tracking merely suggests it): OMIT observation and evidenceFrameIndex. The server marks such findings voice-only.
+- An empty defects array is correct when nothing is supported. Do not hallucinate defects.`;
 
 const defectSchema = z.object({
   id: z.string().min(1),
@@ -38,6 +33,15 @@ const defectSchema = z.object({
   voiceNoteExcerpt: z.string().optional(),
   recommendedAction: z.string().min(1),
   estimatedUrgency: z.enum(["Immediate", "Next scheduled", "Monitor"]),
+  // Model-cited visual evidence (optional → old fixtures and envelope-tolerant
+  // parsing keep working). evidenceSource/overlayBox are server-computed, but the
+  // schema tolerates them so stored reports and fixtures round-trip intact.
+  evidenceFrameIndex: z.number().int().min(0).optional(),
+  observation: z.string().min(1).optional(),
+  evidenceSource: z.enum(["visual", "voice"]).optional(),
+  overlayBox: z
+    .object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() })
+    .optional(),
 });
 
 const reportSchema = z.object({
@@ -103,8 +107,14 @@ const SEVERITY_RANK: Record<Defect["severity"], number> = {
   LOW: 3,
 };
 
+// Sort: severity first, visual evidence before voice-only within the same severity.
+// Missing evidenceSource (pre-evidence reports) sorts as voice — honest fallback.
 export function sortDefects(defects: Defect[]): Defect[] {
-  return [...defects].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+  return [...defects].sort((a, b) => {
+    const sev = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+    if (sev !== 0) return sev;
+    return (a.evidenceSource === "visual" ? 0 : 1) - (b.evidenceSource === "visual" ? 0 : 1);
+  });
 }
 
 export function rollupStats(defects: Defect[]): ReportStatistics {
@@ -147,6 +157,46 @@ export function attachFrameCaptures(defects: Defect[], frames: KeyFrame[]): Defe
       }
     }
     return { ...d, frameCapture: best.base64 };
+  });
+}
+
+// Labels each defect's evidence source SERVER-SIDE — never trust the model for it.
+// "visual" only when evidenceFrameIndex resolves to a real frame AND an observation
+// is present; everything else is "voice". A visual defect's frameCapture is pinned
+// to the cited frame so the UI shows the actual evidence, not a nearest guess.
+export function labelEvidence(defects: Defect[], frames: KeyFrame[]): Defect[] {
+  return defects.map((d) => {
+    const i = d.evidenceFrameIndex;
+    if (
+      typeof i === "number" &&
+      Number.isInteger(i) &&
+      i >= 0 &&
+      i < frames.length &&
+      typeof d.observation === "string" &&
+      d.observation.length > 0
+    ) {
+      return { ...d, evidenceSource: "visual" as const, frameCapture: frames[i].base64 };
+    }
+    return { ...d, evidenceSource: "voice" as const };
+  });
+}
+
+// Attaches the deterministic overlay: the tracked bbox of the defect's asset at
+// the frame nearest the defect timestamp. Pure + offline. No match → untouched.
+export function attachOverlayBox(defects: Defect[], objects: TrackedObject[]): Defect[] {
+  return defects.map((d) => {
+    const obj =
+      objects.find((o) => o.id === d.assetId) ??
+      objects.find((o) => o.category === d.assetCategory);
+    const objFrames = obj?.frames;
+    if (!obj || !objFrames || objFrames.length === 0) return d;
+    let best = objFrames[0];
+    for (const f of objFrames) {
+      if (Math.abs(f.timestamp - d.frameTimestamp) < Math.abs(best.timestamp - d.frameTimestamp)) {
+        best = f;
+      }
+    }
+    return { ...d, overlayBox: { ...best.bbox } };
   });
 }
 
