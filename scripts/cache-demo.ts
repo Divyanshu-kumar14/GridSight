@@ -136,9 +136,8 @@ async function main(): Promise<void> {
   );
   const slim = { ...(done.report as Record<string, unknown>), id: "rep-demo", sessionId: "demo" } as Record<string, unknown>;
   slim.defects = (slim.defects as Record<string, unknown>[]).map((d) => {
-    const { frameCapture: _fc, annotatedImage: _ai, ...rest } = d;
+    const { frameCapture: _fc, ...rest } = d;
     void _fc;
-    void _ai;
     return rest;
   });
   writeFileSync("fixtures/demo-session/report.json", JSON.stringify(slim, null, 2));

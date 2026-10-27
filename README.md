@@ -78,9 +78,22 @@ flowchart LR
 
 Upload probes duration/fps and stashes the clip; tracking streams per-prompt progress over SSE into cancellable jobs; transcription and tagging attach to the same session; the report endpoint validates model defects, rebuilds the envelope, and persists the artifact the report page renders.
 
+## Hackathon Contributions
+
+What follows is limited to what `git log` shows. The initial commit (`e380f4f`) contains only `LICENSE` and a two-line README stub — that is the pre-existing foundation in this repository's history. The application and everything below it were added in the commits after it:
+
+- **End-to-end inspection pipeline** (`056c1f2`): upload, SAM tracking, transcription, note tagging, and the defect-report flow in one Next.js app.
+- **Evidence-cited reporting** (`34ab1d6`, `75dea05`, `bf51dad`): key frames sent to Spark, evidence labeled server-side, and a second-pass verification audit of visual findings.
+- **Spark provider switch** (`45759a8`): tagging/report/verification can run on Muse Spark via Meta, Baseten, or Modal, with the active provider stamped on each report (`modelRun`).
+- **Quota-free evaluation** (`e87eba6`, `9620335`, `b04ba34`, `00e6ab5`): labeled-set and real-image benchmarks with run manifests, committed recorded responses, `NOT EVALUATED` semantics for unscored runs, and a scored cached run.
+- **Tracking hardening** (`5211763`, `90aa83b`, `858d7cc`): per-prompt persistence, retry isolation, upstream cancel propagation, time budgets, and partial-result handling so late failures do not wipe earlier prompts.
+- **Deployment** (`18802ac`): Docker container with a health endpoint.
+
+The demo path is the one in [Try it in 60 seconds](#try-it-in-60-seconds): cached mode runs the same upload → track → transcribe → tag → report loop on frozen fixtures with no API calls, and the report it returns distinguishes one VISUAL verified finding from one VOICE ONLY downgraded finding. Live mode uses the three-model workflow in [Meta platform usage](#meta-platform-usage); no image-generation model runs in either path.
+
 ## Evaluation
 
-Three harnesses, all runnable without a key or network. Numbers below were reproduced from this repo (vitest 282 passed / 22 files; `eval:smoke` 11 checks passed).
+Three harnesses, all runnable without a key or network. Numbers below were reproduced from this repo (vitest 301 passed / 23 files; `eval:smoke` 11 checks passed).
 
 **Frame eval** — cached model outputs re-scored against 30 labeled frames (20 clean, 10 defective), zero quota:
 
@@ -132,7 +145,7 @@ npm run dev                  # http://localhost:3000
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server (`--port 3101` to pin a different port) |
-| `npm test` | Vitest suite — 282 tests, 22 files |
+| `npm test` | Vitest suite — 301 tests, 23 files |
 | `npx tsc --noEmit` | Typecheck |
 | `npm run lint` | Next.js ESLint |
 | `npm run build` | Production build (10 API routes + 4 pages) |
@@ -193,7 +206,7 @@ src/
     frames.ts ffmpeg.ts   thumbnails, key frames, probing
     tagging.ts            voice-note → asset matching
     report.ts verify.ts   prompts, evidence labeling, validation, audit pass
-    export.ts images.ts net.ts audio.ts client-video.ts
+    export.ts net.ts audio.ts client-video.ts
     demo-fixture.ts       frozen offline data (USE_CACHED=true)
   components/  UploadZone, TrackingViewport, VideoOverlayPlayer,
                TranscriptPanel, AssetList, Timeline, DefectCard,

@@ -551,9 +551,8 @@ async function main(): Promise<void> {
         });
         modelCalls += verdictRaw.length;
         const slim = after.map((d) => {
-          const { frameCapture: _fc, annotatedImage: _ai, overlayBox: _ob, ...rest } = d;
+          const { frameCapture: _fc, overlayBox: _ob, ...rest } = d;
           void _fc;
-          void _ai;
           void _ob;
           return rest;
         });

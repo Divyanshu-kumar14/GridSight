@@ -33,7 +33,6 @@ const defectSchema = z.object({
   description: z.string().min(1),
   frameTimestamp: z.number(),
   frameCapture: z.string().optional(),
-  annotatedImage: z.string().optional(),
   voiceNoteExcerpt: z.string().optional(),
   recommendedAction: z.string().min(1),
   estimatedUrgency: z.enum(["Immediate", "Next scheduled", "Monitor"]),

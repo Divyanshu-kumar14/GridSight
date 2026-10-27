@@ -40,8 +40,8 @@ import {
 // 200-stream · 400 nothing to report · 404 session · 502 Spark failure (no fabricated fallback).
 // Key frames are sent to Spark as images (visual ground truth); with no frames
 // (ffmpeg missing / no video) the call degrades to text-only, exactly as before.
-// Muse Image annotation is OFF the critical path (it can invent damage); the UI
-// renders deterministic bbox overlays instead. images.ts stays for tests/optional use.
+// Muse Image annotation is not used (it can invent damage); the UI renders
+// deterministic bbox overlays on the real key frame instead.
 // 200-stream · 400 nothing to report · 404 session · 502 Spark failure (no fabricated fallback).
 // GET ?sessionId= → stored report JSON (memory, else scratch file) · 404 if absent.
 // USE_CACHED=true → scratch JSON if captured, else golden dataset. Zero burn.

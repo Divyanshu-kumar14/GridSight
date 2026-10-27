@@ -1,4 +1,4 @@
-// GridSight core types — verbatim from PRD §8. Do not drift without updating PRD.
+// Core domain types for GridSight's inspection pipeline.
 import type { SparkProvider } from "./models";
 
 // ============ Inspection Session ============
@@ -122,7 +122,6 @@ export interface Defect {
   description: string;
   frameTimestamp: number; // seconds into video
   frameCapture?: string; // base64
-  annotatedImage?: string; // base64 from Muse Image (legacy; render only as labeled illustration)
   voiceNoteExcerpt?: string;
   recommendedAction: string;
   estimatedUrgency: "Immediate" | "Next scheduled" | "Monitor";
@@ -164,7 +163,6 @@ export interface PipelineState {
     transcription: StepStatus;
     assetTagging: StepStatus;
     reportGeneration: StepStatus;
-    imageGeneration: StepStatus;
   };
 }
 

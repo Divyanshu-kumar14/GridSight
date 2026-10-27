@@ -18,7 +18,7 @@ import DotGridBackdrop from "@/components/DotGridBackdrop";
 import PipelineDiagram, { type PipelineDiagramStep } from "@/components/PipelineDiagram";
 import UploadZone, { type UploadForm } from "@/components/UploadZone";
 import { stashVideoFile } from "@/lib/client-video";
-import { ASR_MODEL, IMAGE_MODEL, SAM_MODEL, SPARK_MODEL } from "@/lib/models";
+import { ASR_MODEL, SAM_MODEL, SPARK_MODEL } from "@/lib/models";
 
 const PIPELINE: PipelineDiagramStep[] = [
   { icon: Upload, name: "Drop footage", desc: "Drone MP4, straight from the flight." },
@@ -32,8 +32,6 @@ const MODELS = [
   { id: SAM_MODEL, role: "Eyes", desc: "Object Multiplex tracks 40+ grid assets simultaneously — one pass, ~7× the speed of solo tracking." },
   { id: ASR_MODEL, role: "Ears", desc: "Diarized transcription turns drive-back voice memos into timestamped evidence." },
   { id: SPARK_MODEL, role: "Analyst", desc: "Aligns notes to assets, then writes the severity-ranked defect report as structured JSON." },
-  { id: IMAGE_MODEL, role: "Marker", desc: "Deterministic overlays pin each defect to its tracked box on the real key frame — no painted damage." },
-  { id: "files-api", role: "Loader", desc: "Pre-uploads footage so every model call references one file_id." },
 ];
 
 // Persuade surface: footage in, ranked defects out. No kickers, no metric cards,
@@ -131,7 +129,7 @@ export default function Home() {
       {/* Models */}
       <section id="models" className="border-t" style={{ borderColor: "var(--line)" }}>
         <div className="mx-auto max-w-6xl px-4 py-14">
-          <h2 className="text-3xl font-bold tracking-tight">Five Meta models, one closed loop</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Three Meta models, one closed loop</h2>
           <p className="mt-3 max-w-2xl text-slate-400">
             No wrappers around a single chatbot — each model does the job it was built for,
             and the pipeline closes the loop from pixels to work order.
@@ -199,7 +197,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-6">
           <Zap className="h-4 w-4 text-amber-500" />
           <span className="text-sm font-bold">GridSight</span>
-          <span className="ml-auto font-mono text-xs text-slate-600">BUILT WITH 5 META MODELS · ZERO TRAINING DATA</span>
+          <span className="ml-auto font-mono text-xs text-slate-600">BUILT WITH SAM 3.1 · MUSE SPARK · MUSE VOICE TRANSCRIBE</span>
         </div>
       </footer>
     </main>

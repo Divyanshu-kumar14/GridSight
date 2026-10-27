@@ -1,12 +1,13 @@
 "use client";
 
-import { toDataUrl } from "@/lib/images";
 import type { Defect } from "@/lib/types";
 
 // Contract: one severity-ranked defect with visuals, actions, and seek link.
-// Images: real key frame + deterministic tracked-bbox overlay. A legacy
-// annotatedImage (Muse Image) renders ONLY inside a labeled <details> toggle —
-// it is an AI-generated illustration, never evidence.
+// Images: real key frame + deterministic tracked-bbox overlay only.
+
+function toDataUrl(b64: string, mime = "image/jpeg"): string {
+  return `data:${mime};base64,${b64}`;
+}
 const badge: Record<Defect["severity"], string> = {
   CRITICAL: "bg-red-600",
   HIGH: "bg-orange-500",
@@ -138,19 +139,6 @@ export default function DefectCard({
         </div>
       ) : (
         <p className="mt-3 rounded-md border border-dashed border-line p-3 text-xs text-slate-500">No frame capture available.</p>
-      )}
-      {defect.annotatedImage && (
-        <details className="mt-2 text-xs text-slate-500">
-          <summary className="cursor-pointer hover:text-slate-300">
-            AI-generated illustration (not evidence)
-          </summary>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={toDataUrl(defect.annotatedImage)}
-            alt="AI-generated illustration, not inspection evidence"
-            className="mt-2 aspect-video max-h-64 w-full rounded-md border border-dashed border-slate-700 object-contain bg-black opacity-80"
-          />
-        </details>
       )}
       <p className="mt-3 text-sm text-slate-300">{defect.description}</p>
       {defect.voiceNoteExcerpt && (
