@@ -5,10 +5,10 @@ import { getSession, setTracking, updateSession } from "@/lib/store";
 import { demoTracking } from "@/lib/demo-fixture";
 import { completeJob, createJob, failJob, isCancelled, updateJobProgress } from "@/lib/jobs";
 import {
-  isStreamClosedError,
   runTrackPrompts,
 } from "@/lib/track-run";
-import { TRACK_CANCELLED } from "@/lib/sam";
+import { isStreamClosedError, TRACK_CANCELLED } from "@/lib/sam";
+import { TRACK_BUDGET_MS } from "@/lib/track-run";
 
 // POST /api/track — { sessionId, prompts[] } → SSE stream.
 // Events: progress | object_detected | frame_complete | tracking_complete.
@@ -84,6 +84,31 @@ export async function POST(req: Request): Promise<Response> {
       } catch {
         /* signal unsupported — closed-send path remains the backstop */
       }
+      // Watchdog: per-chunk enforcement inside trackPrompt goes silent when
+      // the stream yields zero chunks at all (fully stalled). Poll the cancel
+      // flag and the run budget here so a dead-still run still terminates
+      // promptly instead of burning quota to the next parsed frame that may
+      // never come. The orchestrator classifies the resulting abort.
+      const runStartedAt = Date.now();
+      const watchdog = setInterval(() => {
+        try {
+          if (isCancelled(job.id)) {
+            try {
+              upstream.abort();
+            } catch {
+              /* already settled */
+            }
+          } else if (Date.now() - runStartedAt > TRACK_BUDGET_MS) {
+            try {
+              upstream.abort();
+            } catch {
+              /* already settled */
+            }
+          }
+        } catch {
+          /* watchdog must never break the run */
+        }
+      }, 1000);
       try {
         updateSession(sessionId, { status: "tracking" });
         send("started", { jobId: job.id });
@@ -212,6 +237,8 @@ export async function POST(req: Request): Promise<Response> {
           }),
         );
         closed(() => controller.close());
+      } finally {
+        clearInterval(watchdog);
       }
     },
   });

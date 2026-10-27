@@ -18,24 +18,23 @@
 import {
   buildTrackedObjects,
   isAbortError,
-  isStreamClosedError,
   mergeAndDedupe,
   TRACK_CANCELLED,
+  TRACK_TIMEOUT,
   type RawDetection,
+  type TrackProgress,
   type TrackPromptOptions,
 } from "./sam";
 import type { TrackedObject } from "./types";
 
-export { TRACK_CANCELLED, isAbortError, isStreamClosedError };
-
-/** Backstop so one oversized multi-prompt run cannot burn quota forever. */
+/** Server time budget: documented timeout policy lives in the header above. */
 export const TRACK_BUDGET_MS = 10 * 60 * 1000;
 
 export interface TrackPromptFn {
   (
     fileId: string,
     category: string,
-    onProgress?: (p: { frameIndex: number; totalSoFar: number }) => void,
+    onProgress?: (p: TrackProgress) => void,
     opts?: TrackPromptOptions,
   ): Promise<{ frameIndex: number; detections: RawDetection[] }[]>;
 }
@@ -69,9 +68,6 @@ export interface TrackRunOutcome {
   completedPrompts: number;
 }
 
-/** Sentinel: server time budget exceeded mid-prompt. Converted to a "timeout" outcome (never surfaced). */
-const TRACK_TIMEOUT = "__TRACK_TIMEOUT__";
-
 export async function runTrackPrompts(deps: TrackRunDeps): Promise<TrackRunOutcome> {
   const { sessionId, fileId, fps, prompts, trackPrompt, persist, isCancelled, onFrame, onPromptDone } = deps;
   const now = deps.now ?? Date.now;
@@ -80,48 +76,84 @@ export async function runTrackPrompts(deps: TrackRunDeps): Promise<TrackRunOutco
   const overBudget = () => now() - startedAt > budgetMs;
   const categories = prompts.map((p) => p.trim().toLowerCase());
   const groups: TrackedObject[][] = [];
-  let merged: TrackedObject[] = [];
+  // Mirrors exactly what was last persisted, so every terminal outcome
+  // reports the same objects the store already holds — never silently more.
+  let lastPersisted: TrackedObject[] = [];
+  const save = (objects: TrackedObject[]) => {
+    persist(objects);
+    lastPersisted = objects;
+  };
   for (let pi = 0; pi < categories.length; pi++) {
     if (isCancelled()) {
-      return { status: "cancelled", objects: merged, completedPrompts: pi };
+      return { status: "cancelled", objects: lastPersisted, completedPrompts: pi };
     }
     if (overBudget()) {
-      return { status: "timeout", objects: merged, completedPrompts: pi };
+      return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
     }
     const category = categories[pi];
+    // Frames parsed so far for the ACTIVE prompt. Rebuilt into trackable
+    // objects and persisted incrementally, so a cancel/timeout/disconnect
+    // mid-prompt keeps evidence instead of dropping it. Never enters
+    // `groups` (deduped below), so completed prompts are never duplicated.
+    // IDs stay stable: buildTrackedObjects assigns them deterministically in
+    // first-seen order, and the final build sees the same order.
+    const partialFrames: { frameIndex: number; detections: RawDetection[] }[] = [];
+    const seenFrame = new Set<number>();
     let raw: { frameIndex: number; detections: RawDetection[] }[];
     try {
       raw = await trackPrompt(
         fileId,
         category,
-        (p) => {
+        (prog) => {
           // Enforce the server deadline DURING the prompt, not just between
           // prompts: a single giant stream must not consume the whole budget.
           if (overBudget()) throw new Error(TRACK_TIMEOUT);
-          onFrame({ prompt: category, promptIndex: pi, frameIndex: p.frameIndex, totalSoFar: p.totalSoFar });
+          if (prog.frame && !seenFrame.has(prog.frame.frameIndex)) {
+            seenFrame.add(prog.frame.frameIndex);
+            partialFrames.push(prog.frame);
+            const partial = buildTrackedObjects({ sessionId, category, frames: partialFrames, fps });
+            save(mergeAndDedupe([...groups, partial]));
+          }
+          onFrame({ prompt: category, promptIndex: pi, frameIndex: prog.frameIndex, totalSoFar: prog.totalSoFar });
         },
-        { signal: deps.signal },
+        {
+          signal: deps.signal,
+          isCancelled,
+          isExpired: overBudget,
+        },
       );
     } catch (err) {
       if (err instanceof Error && err.message === TRACK_CANCELLED) {
-        return { status: "cancelled", objects: merged, completedPrompts: pi };
+        return { status: "cancelled", objects: lastPersisted, completedPrompts: pi };
       }
       if (err instanceof Error && err.message === TRACK_TIMEOUT) {
-        return { status: "timeout", objects: merged, completedPrompts: pi };
+        return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
       }
-      // An aborted upstream request means manual cancel or client disconnect.
-      // The route tells them apart via the cancel flag; either way the
-      // completed prompts are preserved, never discarded.
+      // An aborted upstream request means manual cancel, client disconnect,
+      // or an expired budget racing the abort. Classify explicitly — never a
+      // silent "disconnected" when the cancel flag or budget says otherwise.
       if (isAbortError(err)) {
-        return { status: "disconnected", objects: merged, completedPrompts: pi };
+        if (isCancelled()) {
+          return { status: "cancelled", objects: lastPersisted, completedPrompts: pi };
+        }
+        if (overBudget()) {
+          return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
+        }
+        return { status: "disconnected", objects: lastPersisted, completedPrompts: pi };
       }
       throw err;
     }
+    // A prompt that finished after the deadline must not silently count as
+    // completed — but its already-received detections are valid evidence, so
+    // they are still built and persisted (never silently dropped).
+    const finishedInBudget = !overBudget();
     const objects = buildTrackedObjects({ sessionId, category, frames: raw, fps });
     groups.push(objects);
-    merged = mergeAndDedupe(groups);
-    persist(merged);
+    save(mergeAndDedupe(groups));
     onPromptDone({ prompt: category, count: objects.length });
+    if (!finishedInBudget) {
+      return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
+    }
   }
-  return { status: "complete", objects: merged, completedPrompts: categories.length };
+  return { status: "complete", objects: lastPersisted, completedPrompts: categories.length };
 }

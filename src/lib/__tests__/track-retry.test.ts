@@ -9,9 +9,11 @@ vi.mock("../meta-client", () => ({
 import {
   formatSamDebug,
   isRetryableProviderError,
+  isStreamClosedError,
   SAM_DEBUG_HEAD_CHARS,
   samDebugEnabled,
   TRACK_CANCELLED,
+  TRACK_TIMEOUT,
   trackPrompt,
 } from "../sam";
 
@@ -121,6 +123,14 @@ describe("trackPrompt retry isolation (mocked provider, no network)", () => {
     expect(opts.signal).toBe(controller.signal);
   });
 
+  it("isStreamClosedError only matches dead-stream failures", () => {
+    expect(isStreamClosedError(new Error("Invalid state: Controller is already closed"))).toBe(true);
+    expect(isStreamClosedError(new Error("boom"))).toBe(false);
+    expect(isStreamClosedError(new Error(TRACK_CANCELLED))).toBe(false);
+    expect(isStreamClosedError("already closed")).toBe(true);
+    expect(isStreamClosedError(null)).toBe(false);
+  });
+
   it("isRetryableProviderError classifies without guessing", () => {
     expect(isRetryableProviderError(new Error("boom"))).toBe(true);
     expect(isRetryableProviderError(statusErr(500))).toBe(true);
@@ -128,8 +138,42 @@ describe("trackPrompt retry isolation (mocked provider, no network)", () => {
     expect(isRetryableProviderError(statusErr(401))).toBe(false);
     expect(isRetryableProviderError(statusErr(404))).toBe(false);
     expect(isRetryableProviderError(new Error(TRACK_CANCELLED))).toBe(false);
+    expect(isRetryableProviderError(new Error(TRACK_TIMEOUT))).toBe(false);
     expect(isRetryableProviderError(Object.assign(new Error("x"), { name: "AbortError" }))).toBe(false);
     expect(isRetryableProviderError(new Error("Invalid state: Controller is already closed"))).toBe(false);
+  });
+
+  it("an expired budget stops retries: one attempt, timeout error, no extra quota", async () => {
+    vi.useFakeTimers();
+    createMock.mockRejectedValueOnce(statusErr(500));
+    let checks = 0;
+    const p = trackPrompt("f1", "pole", undefined, { isExpired: () => ++checks > 1 });
+    await expect(p).rejects.toThrow(TRACK_TIMEOUT);
+    // Pre-loop check passed (call 1), attempt failed retryably, expiry check
+    // (call 2) stopped the retry before a second provider call.
+    expect(checks).toBe(2);
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("per-chunk checks fire on unparseable streams that yield zero frames", async () => {
+    // Unparseable prose: no <Nf> heads, so no parsed frames ever emit.
+    const chunks = [{ delta: "still looking at the video feed " }, { delta: "no objects visible yet " }];
+    let calls = 0;
+    createMock.mockImplementation(async () => streamOf(chunks));
+    await expect(
+      trackPrompt("f1", "pole", undefined, { isCancelled: () => ++calls > 1 }),
+    ).rejects.toThrow(TRACK_CANCELLED);
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("per-chunk budget fires on unparseable streams without waiting for frames", async () => {
+    const chunks = [{ delta: "scanning " }, { delta: "scanning more " }];
+    let calls = 0;
+    createMock.mockImplementation(async () => streamOf(chunks));
+    await expect(
+      trackPrompt("f1", "pole", undefined, { isExpired: () => ++calls > 1 }),
+    ).rejects.toThrow(TRACK_TIMEOUT);
+    expect(createMock).toHaveBeenCalledTimes(1);
   });
 });
 

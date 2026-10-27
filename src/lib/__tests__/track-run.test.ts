@@ -4,7 +4,7 @@ import {
   TRACK_BUDGET_MS,
   type TrackRunDeps,
 } from "../track-run";
-import { isStreamClosedError, TRACK_CANCELLED } from "../sam";
+import { TRACK_CANCELLED } from "../sam";
 import type { TrackedObject } from "../types";
 
 // Deterministic canned SAM frames — no network, no quota.
@@ -106,7 +106,7 @@ describe("runTrackPrompts orchestration", () => {
     expect(persisted[0]).toHaveLength(1);
   });
 
-  it("budget timeout stops with partials and an explicit timeout status", async () => {
+  it("a prompt finishing after the deadline is not counted complete, but its frames are kept", async () => {
     let t = 0;
     const trackPrompt = vi.fn(async () => [det("0")]);
     const { deps, persisted } = harness({
@@ -117,9 +117,12 @@ describe("runTrackPrompts orchestration", () => {
     });
     const out = await runTrackPrompts(deps);
     expect(out.status).toBe("timeout");
-    expect(out.completedPrompts).toBe(1);
+    // Finished after the deadline: not reported as completed...
+    expect(out.completedPrompts).toBe(0);
+    // ...but the already-received detections are preserved, not dropped.
     expect(out.objects).toHaveLength(1);
     expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toHaveLength(1);
     expect(TRACK_BUDGET_MS).toBeGreaterThan(0);
   });
 
@@ -140,14 +143,6 @@ describe("runTrackPrompts orchestration", () => {
     const out = await runTrackPrompts(deps);
     expect(out.status).toBe("cancelled");
     expect(out.completedPrompts).toBe(0);
-  });
-
-  it("isStreamClosedError only matches dead-stream failures", () => {
-    expect(isStreamClosedError(new Error("Invalid state: Controller is already closed"))).toBe(true);
-    expect(isStreamClosedError(new Error("boom"))).toBe(false);
-    expect(isStreamClosedError(new Error(TRACK_CANCELLED))).toBe(false);
-    expect(isStreamClosedError("already closed")).toBe(true);
-    expect(isStreamClosedError(null)).toBe(false);
   });
 
   it("passes the abort signal through to the provider call", async () => {
@@ -204,5 +199,77 @@ describe("runTrackPrompts orchestration", () => {
     expect(out.completedPrompts).toBe(1);
     expect(out.objects).toHaveLength(1);
     expect(persisted).toHaveLength(1);
+  });
+
+  it("an abort with the cancel flag set reports cancelled, not disconnected", async () => {
+    const abort = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+    const trackPrompt = vi.fn(async () => {
+      throw abort;
+    });
+    const { deps } = harness({ prompts: ["pole"], trackPrompt, isCancelled: () => true });
+    const out = await runTrackPrompts(deps);
+    // Boundary check fires first here; the abort path also maps to cancelled.
+    expect(out.status).toBe("cancelled");
+    expect(out.completedPrompts).toBe(0);
+  });
+
+  it("an abort past the deadline reports timeout, not disconnected", async () => {
+    const abort = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+    let t = 0;
+    const trackPrompt = vi.fn(async () => {
+      throw abort;
+    });
+    const { deps } = harness({
+      prompts: ["pole"],
+      trackPrompt,
+      now: () => (t += 10000),
+      budgetMs: 1000,
+    });
+    const out = await runTrackPrompts(deps);
+    expect(out.status).toBe("timeout");
+    expect(out.completedPrompts).toBe(0);
+  });
+
+  it("mid-prompt abort keeps partial frames with stable IDs and no duplicates", async () => {
+    const abort = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+    const f1 = { frameIndex: 5, detections: [{ objectId: "0", bbox: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, maskRaw: "" }] };
+    const f2 = { frameIndex: 9, detections: [{ objectId: "0", bbox: { x: 0.11, y: 0.11, w: 0.2, h: 0.2 }, maskRaw: "" }] };
+    type Prog = { frameIndex: number; totalSoFar: number; frame?: typeof f1 };
+    const trackPrompt = vi.fn(async (_f: string, _c: string, onProgress?: (p: Prog) => void) => {
+      onProgress?.({ frameIndex: 5, totalSoFar: 1, frame: f1 });
+      onProgress?.({ frameIndex: 9, totalSoFar: 2, frame: f2 });
+      throw abort;
+    });
+    const { deps, persisted } = harness({ prompts: ["pole"], trackPrompt: trackPrompt as never });
+    const out = await runTrackPrompts(deps);
+    expect(out.status).toBe("disconnected");
+    expect(out.completedPrompts).toBe(0);
+    // Two incremental persists (one per parsed frame), same single object.
+    expect(persisted).toHaveLength(2);
+    expect(persisted[0]).toHaveLength(1);
+    expect(persisted[1]).toHaveLength(1);
+    expect(persisted[0][0].id).toBe(persisted[1][0].id);
+    expect(persisted[1][0].totalFrameCount).toBe(2);
+    expect(out.objects).toHaveLength(1);
+    expect(out.objects[0].id).toBe(persisted[0][0].id);
+  });
+
+  it("completed prompts reuse the same IDs as their partials (no duplicates)", async () => {
+    const f1 = { frameIndex: 5, detections: [{ objectId: "0", bbox: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }, maskRaw: "" }] };
+    const f2 = { frameIndex: 9, detections: [{ objectId: "0", bbox: { x: 0.11, y: 0.11, w: 0.2, h: 0.2 }, maskRaw: "" }] };
+    type Prog = { frameIndex: number; totalSoFar: number; frame?: typeof f1 };
+    const trackPrompt = vi.fn(async (_f: string, _c: string, onProgress?: (p: Prog) => void) => {
+      onProgress?.({ frameIndex: 5, totalSoFar: 1, frame: f1 });
+      onProgress?.({ frameIndex: 9, totalSoFar: 2, frame: f2 });
+      return [f1, f2];
+    });
+    const { deps, persisted } = harness({ prompts: ["pole"], trackPrompt: trackPrompt as never });
+    const out = await runTrackPrompts(deps);
+    expect(out.status).toBe("complete");
+    // Two partial persists + one final persist, all naming the same object.
+    expect(persisted).toHaveLength(3);
+    const ids = persisted.map((objs) => objs.map((o) => o.id));
+    expect(ids).toEqual([["pole-001"], ["pole-001"], ["pole-001"]]);
+    expect(out.objects).toHaveLength(1);
   });
 });

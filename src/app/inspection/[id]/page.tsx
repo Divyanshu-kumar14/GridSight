@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import AssetList from "@/components/AssetList";
 import PipelineProgress, { type PipeStep } from "@/components/PipelineProgress";
@@ -10,6 +10,7 @@ import VideoOverlayPlayer from "@/components/VideoOverlayPlayer";
 import WorkspaceSplit from "@/components/WorkspaceSplit";
 import { getVideoFile, stashVideoFile, videoObjectUrl } from "@/lib/client-video";
 import { TIMEOUTS, fetchWithTimeout } from "@/lib/net";
+import { haltNotice, loadPersistedTracking } from "@/lib/track-status";
 import type { DefectReport, TaggedNote, TrackedObject, TranscriptSegment } from "@/lib/types";
 
 // Native fps loads per-session (probed at upload); 30 until then.
@@ -31,6 +32,7 @@ export default function InspectionPage() {
   const [tracking, setTracking] = useState<"idle" | "running" | "done" | "error">("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [persistNotice, setPersistNotice] = useState<string | null>(null);
   const [seekTo, setSeekTo] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -48,6 +50,51 @@ export default function InspectionPage() {
   const [reportFound, setReportFound] = useState(0);
   const [fps, setFps] = useState(30);
 
+  const fetchThumbs = useCallback(
+    async (objs: TrackedObject[]) => {
+    if (objs.length === 0) return;
+    try {
+      const res = await fetch("/api/frames", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      const json = await res.json().catch(() => null);
+      const map: Record<string, string> = {};
+      const list = (json?.thumbs ?? []) as { objectId: string; url: string }[];
+      for (const t of list) map[t.objectId] = t.url;
+      setThumbs(map);
+    } catch {
+      // Thumbnails are enhancement-only; the asset list works without them.
+    }
+    },
+    [sessionId],
+  );
+
+  // Restore persisted tracking after a timeout, cancel, or page revisit so
+  // saved partials are visible instead of leaving an empty workspace.
+  // "refresh" also runs right after an abort/error to surface what survived.
+  const refreshPersisted = useCallback(
+    async (mode: "mount" | "abort" | "cancel" | "error"): Promise<void> => {
+      const state = await loadPersistedTracking(sessionId);
+      if (!state) return;
+      if (state.objects.length > 0) {
+        setObjects(state.objects);
+        void fetchThumbs(state.objects);
+      }
+      if (mode === "error") return; // server message already shown in the error banner
+      const note =
+        haltNotice(state) ??
+        (mode === "abort"
+          ? state.objects.length > 0
+            ? `Request ended on this page — recovered ${state.objects.length} saved object(s). The server run reports its own terminal status.`
+            : "Request ended on this page before anything was saved."
+          : null);
+      if (note) setPersistNotice(note);
+    },
+    [sessionId, fetchThumbs],
+  );
+
   useEffect(() => {
     setSrc(videoObjectUrl(sessionId));
     const t = Number(search.get("t"));
@@ -60,7 +107,8 @@ export default function InspectionPage() {
         if (Number.isFinite(f) && f > 0) setFps(f);
       })
       .catch(() => null);
-  }, [sessionId, search]);
+    void refreshPersisted("mount");
+  }, [sessionId, search, refreshPersisted]);
 
   const duration = useMemo(() => {
     let max = 0;
@@ -93,28 +141,11 @@ export default function InspectionPage() {
   const trackAbort = useRef<AbortController | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
-  const fetchThumbs = async (objs: TrackedObject[]) => {
-    if (objs.length === 0) return;
-    try {
-      const res = await fetch("/api/frames", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
-      });
-      const json = await res.json().catch(() => null);
-      const map: Record<string, string> = {};
-      const list = (json?.thumbs ?? []) as { objectId: string; url: string }[];
-      for (const t of list) map[t.objectId] = t.url;
-      setThumbs(map);
-    } catch {
-      // Thumbnails are enhancement-only; the asset list works without them.
-    }
-  };
-
   const startTracking = async () => {
     setTracking("running");
     setProgress(0);
     setError(null);
+    setPersistNotice(null);
     setTrackJobId(null);
     const controller = new AbortController();
     trackAbort.current = controller;
@@ -157,7 +188,9 @@ export default function InspectionPage() {
               void fetchThumbs(objs);
             } else if (evt.type === "cancelled") {
               setTracking("idle");
-              setError("Tracking cancelled.");
+              // Server-confirmed cancel (the job row carries it too) — report
+              // partials explicitly rather than a bare "cancelled".
+              void refreshPersisted("cancel");
             } else if (evt.type === "error") {
               throw new Error(typeof d?.message === "string" ? d.message : "Tracking failed.");
             }
@@ -168,11 +201,15 @@ export default function InspectionPage() {
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
+        // Client-side abort only — do NOT call it a confirmed cancellation.
+        // The server may still be winding down; show what actually persisted.
         setTracking("idle");
-        setError("Tracking cancelled.");
+        setError(null);
+        void refreshPersisted("abort");
       } else {
         setError(err instanceof Error ? err.message : "Tracking failed.");
         setTracking("error");
+        void refreshPersisted("error");
       }
     } finally {
       trackAbort.current = null;
@@ -353,6 +390,12 @@ export default function InspectionPage() {
           <p role="alert" className="mt-3 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300">
             {error}{" "}
             <button onClick={startTracking} className="underline">Retry</button>
+          </p>
+        )}
+
+        {persistNotice && (
+          <p className="mt-3 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+            {persistNotice}
           </p>
         )}
 

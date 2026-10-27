@@ -216,7 +216,9 @@ export async function withRetry<T>(
   fn: () => Promise<T>,
   delaysMs: number[] = RETRY_DELAYS_MS,
   retryable: (err: unknown) => boolean = () => true,
+  isExpired?: () => boolean,
 ): Promise<T> {
+  if (isExpired?.()) throw new Error(TRACK_TIMEOUT);
   let last: unknown;
   for (let attempt = 0; attempt <= delaysMs.length; attempt++) {
     try {
@@ -224,6 +226,10 @@ export async function withRetry<T>(
     } catch (err) {
       last = err;
       if (!retryable(err)) throw err;
+      // A deadline must stop additional provider retries, not merely the
+      // next prompt: a failed attempt near the budget must not schedule
+      // another quota-burning call past it.
+      if (isExpired?.()) throw new Error(TRACK_TIMEOUT);
       if (attempt === delaysMs.length) break;
       await new Promise((r) => setTimeout(r, delaysMs[attempt]));
     }
@@ -241,6 +247,9 @@ export async function withRetry<T>(
 
 /** Cooperative-cancel sentinel thrown by progress callbacks. Never surfaced, never retried. */
 export const TRACK_CANCELLED = "__CANCELLED__";
+
+/** Server time-budget sentinel. Never surfaced as-is, never retried; the orchestrator converts it to a "timeout" outcome. */
+export const TRACK_TIMEOUT = "__TRACK_TIMEOUT__";
 
 export function isAbortError(err: unknown): boolean {
   return (
@@ -266,7 +275,7 @@ function providerStatus(err: unknown): number | null {
 
 /** Only retry failures that are safe and meaningful: transient network/5xx and rate limits. */
 export function isRetryableProviderError(err: unknown): boolean {
-  if (err instanceof Error && err.message === TRACK_CANCELLED) return false;
+  if (err instanceof Error && (err.message === TRACK_CANCELLED || err.message === TRACK_TIMEOUT)) return false;
   if (isAbortError(err)) return false;
   if (isStreamClosedError(err)) return false;
   const status = providerStatus(err);
@@ -338,11 +347,19 @@ export function samDebugEnabled(): boolean {
 export interface TrackProgress {
   frameIndex: number;
   totalSoFar: number;
+  /** 0-based provider attempt that produced this frame. Resets across retries. */
+  attempt?: number;
+  /** The parsed frame itself, for incremental consumers (rebuilt per attempt). */
+  frame?: { frameIndex: number; detections: RawDetection[] };
 }
 
 export interface TrackPromptOptions {
   /** AbortSignal forwarded to the provider request (manual cancel, client disconnect). */
   signal?: AbortSignal;
+  /** Cooperative cancel flag, polled per stream chunk (fires even on empty/unparseable streams). */
+  isCancelled?: () => boolean;
+  /** Server time budget, polled per stream chunk (fires even with zero parsed frames). */
+  isExpired?: () => boolean;
 }
 
 export async function trackPrompt(
@@ -357,8 +374,10 @@ export async function trackPrompt(
     : null;
   // Retry isolation: every provider attempt gets its own detections and
   // parser state. A failed attempt's frames must never leak into a retry.
+  let attemptNo = -1;
   const collected = await withRetry(
     async () => {
+      attemptNo += 1;
       const attempt: { frameIndex: number; detections: RawDetection[] }[] = [];
       const stream = await client.responses.create(
         {
@@ -384,11 +403,17 @@ export async function trackPrompt(
         onProgress?.({
           frameIndex: parsed.frameIndex,
           totalSoFar: attempt.length,
+          attempt: attemptNo,
+          frame: parsed,
         });
       };
       for await (const event of stream as unknown as AsyncIterable<unknown>) {
         const text = extractTextDelta(event);
         if (!text) continue;
+        // Per-chunk enforcement: these fire even when the stream yields zero
+        // parseable frames, which is exactly when per-frame hooks go silent.
+        if (opts?.isCancelled?.()) throw new Error(TRACK_CANCELLED);
+        if (opts?.isExpired?.()) throw new Error(TRACK_TIMEOUT);
         if (debug) {
           // Bounded: counters only, plus a capped head. Never retain the stream.
           debug.totalChars += text.length;
@@ -412,6 +437,7 @@ export async function trackPrompt(
     },
     undefined,
     isRetryableProviderError,
+    opts?.isExpired,
   );
   if (debug) {
     const matchedRecords = collected.reduce((n, f) => n + f.detections.length, 0);
