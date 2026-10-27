@@ -8,7 +8,7 @@ import type {
   TrackedObject,
 } from "./types";
 
-// Contract: defect report support (PRD §7 Feature 3, Appendix A report prompt).
+// Contract: defect report support.
 // Normal: Spark JSON → validated → severity-sorted → stats recomputed → frames attached.
 // Empty: zero defects → valid report with zero stats. Invalid: schema mismatch → throws.
 

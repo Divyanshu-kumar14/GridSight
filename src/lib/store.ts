@@ -8,7 +8,7 @@ import {
   TranscriptSegment,
 } from "./types";
 
-// Contract: session store backed by SQLite (PRD §8 — no DB *server*; a file DB keeps
+// Contract: session store backed by SQLite (no DB *server*; a file DB keeps
 // the hackathon zero-ops while surviving restarts and recompiles).
 // Same API as the old memory store, so routes are untouched.
 // Normal: create/get/update round-trips, hot or cold. Empty: get on unknown → undefined/[].

@@ -5,7 +5,7 @@ import type { TranscriptSegment } from "./types";
 
 const execFileAsync = promisify(execFile);
 
-// Contract: audio helpers for Muse Voice Transcribe (PRD §6.3).
+// Contract: audio helpers for Muse Voice Transcribe.
 // Limits: ≤32MB, ≤10min, mono 16-bit PCM WAV 16kHz (converted via ffmpeg).
 // Normal: valid file → normalized wav path. Empty/invalid → throws with 400-safe message.
 

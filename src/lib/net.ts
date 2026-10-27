@@ -1,4 +1,4 @@
-// Contract: fetch with a hard timeout (PRD §15 — no hanging pipeline steps).
+// Contract: fetch with a hard timeout (no hanging pipeline steps).
 // Normal: resolves/rejects as upstream does. Timeout: rejects with Error("timed out after Nms").
 // Invalid ms (≤0/NaN) → throws immediately (fail loudly, never silent no-timeout).
 

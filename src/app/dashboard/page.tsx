@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, FolderOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-// All-inspections dashboard (PRD §4 support feature): every session in the SQLite
+// All-inspections dashboard: every session in the SQLite
 // store with status + rollups, linking out to workspace and report.
 interface Row {
   id: string;

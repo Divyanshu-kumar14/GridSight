@@ -89,7 +89,7 @@ export interface DefectReport {
   // Optional so existing fixtures and stored reports still parse.
   modelRun?: { provider: SparkProvider; model: string };
   // Coverage transparency (SERVER-COMPUTED from tracking + key frames + defects,
-  // never model-generated). Optional so legacy reports still parse.
+  // never model-generated). Optional so older stored reports still parse.
   evidenceCoverage?: EvidenceCoverage;
 }
 
@@ -133,7 +133,7 @@ export interface Defect {
   // Asset-association status (SERVER-COMPUTED via attachOverlayBox, never trusted
   // from the model). "confirmed" = exact assetId hit with a valid bbox attached.
   // "unresolved" = no exact hit or no valid bbox — finding is preserved, no box is
-  // borrowed from another asset. Absent on legacy stored reports (treated as unknown).
+  // borrowed from another asset. Absent on older stored reports (treated as unknown).
   assetAssociation?: "confirmed" | "unresolved";
   // Second-pass audit (see verify.ts): the model re-checks its own visual claim
   // against the cited frame. Absent on voice-only findings (never verified).

@@ -2,7 +2,7 @@ import { getMetaClient } from "./meta-client";
 import { SAM_MODEL } from "./models";
 import type { BoundingBox, TrackedFrame, TrackedObject } from "./types";
 
-// Contract: SAM 3.1 helpers (PRD §6.2).
+// Contract: SAM 3.1 helpers.
 // Pure functions (parse/iou/merge) are offline-testable, zero API cost.
 // Network functions (upload/track) retry 3× with backoff and fail loudly.
 
