@@ -99,7 +99,7 @@ describe("process.env readers", () => {
     });
     withEnv({ SPARK_PROVIDER: "modal", MODAL_BASE_URL: "https://m.local", MODAL_MODEL: "m-open", MODAL_API_KEY: undefined }, () => {
       expect(() => getSparkClient()).toThrow(
-        "SPARK_PROVIDER=modal requires MODAL_API_KEY (see .env.example).",
+        /SPARK_PROVIDER=modal requires MODAL_API_KEY or MODAL_PROXY_TOKEN_ID/,
       );
     });
   });
