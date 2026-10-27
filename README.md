@@ -139,6 +139,8 @@ scripts/       smoke-meta.ts, smoke-models.ts, cache-demo.ts, capture-sam-sample
 ## Known limits
 
 - Single-user, single-node: SQLite + local scratch dir, no auth.
-- Transcription needs staged audio (record in-browser or attach a file); without it the report path still works but defects will be empty by design.
+- The cached demo (`USE_CACHED=true`) is a voice-only sample, so both findings show `VOICE ONLY`. The `VISUAL` path needs real footage — run it once live before recording.
+- Key frames are downscaled to 1280px (q≈4, ~40–150KB) before they are sent to Spark; full-resolution frames would blow the vision request budget.
+- Transcription needs staged audio (record in-browser or attach a file); visual findings still work without it, but note-only findings require a transcript.
 - Thumbnail/key-frame extraction needs `ffmpeg`; failures skip loudly per-asset without failing the batch.
-- PDF export is deferred; CSV export ships.
+- PDF export is deferred; CSV export ships (with `evidenceSource` + `observation` columns).
