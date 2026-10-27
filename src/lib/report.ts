@@ -39,6 +39,14 @@ const defectSchema = z.object({
   evidenceFrameIndex: z.number().int().min(0).optional(),
   observation: z.string().min(1).optional(),
   evidenceSource: z.enum(["visual", "voice"]).optional(),
+  // Second-pass audit marker (server-applied via applyVerdict; optional so old
+  // fixtures and stored reports still parse).
+  verification: z
+    .object({
+      verdict: z.enum(["keep", "downgrade", "drop", "skipped"]),
+      reason: z.string().min(1),
+    })
+    .optional(),
   overlayBox: z
     .object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() })
     .optional(),
@@ -58,6 +66,13 @@ const reportSchema = z.object({
   }),
   summary: z.string(),
   defects: z.array(defectSchema),
+  // Provenance (optional → existing fixtures and stored reports still parse).
+  modelRun: z
+    .object({
+      provider: z.enum(["meta", "baseten", "modal"]),
+      model: z.string().min(1),
+    })
+    .optional(),
   statistics: z.object({
     critical: z.number(),
     high: z.number(),

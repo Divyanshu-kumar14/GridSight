@@ -45,6 +45,7 @@ export async function extractFrame(
   videoPath: string,
   timestampSec: number,
   outPath: string,
+  maxEdge: number = KEY_FRAME_MAX_EDGE,
 ): Promise<string> {
   if (!Number.isFinite(timestampSec) || timestampSec < 0) {
     throw new Error(`extractFrame: invalid timestamp ${timestampSec}.`);
@@ -59,7 +60,7 @@ export async function extractFrame(
       "-frames:v",
       "1",
       "-vf",
-      buildKeyFrameFilter(),
+      buildKeyFrameFilter(maxEdge),
       "-q:v",
       String(KEY_FRAME_QUALITY),
       outPath,

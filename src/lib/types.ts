@@ -1,4 +1,5 @@
 // GridSight core types — verbatim from PRD §8. Do not drift without updating PRD.
+import type { SparkProvider } from "./models";
 
 // ============ Inspection Session ============
 
@@ -84,6 +85,9 @@ export interface DefectReport {
   defects: Defect[];
   statistics: ReportStatistics;
   generatedAt: string;
+  // Provenance: which Spark endpoint wrote the defects (open-weight prize proof).
+  // Optional so existing fixtures and stored reports still parse.
+  modelRun?: { provider: SparkProvider; model: string };
 }
 
 export interface InspectionMetadata {
@@ -114,6 +118,12 @@ export interface Defect {
   observation?: string; // what is actually visible in the cited frame
   evidenceSource?: "visual" | "voice"; // SERVER-COMPUTED, never trusted from the model
   overlayBox?: BoundingBox; // SERVER-COMPUTED tracked bbox at defect time (deterministic overlay)
+  // Second-pass audit (see verify.ts): the model re-checks its own visual claim
+  // against the cited frame. Absent on voice-only findings (never verified).
+  verification?: {
+    verdict: "keep" | "downgrade" | "drop" | "skipped";
+    reason: string;
+  };
 }
 
 export interface ReportStatistics {
@@ -122,6 +132,8 @@ export interface ReportStatistics {
   medium: number;
   low: number;
   byCategory: Record<string, number>;
+  // Second-pass audit counts (present on reports generated with verification).
+  verification?: { kept: number; downgraded: number; dropped: number; skipped: number };
 }
 
 // ============ Pipeline State ============

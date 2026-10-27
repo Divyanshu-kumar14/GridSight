@@ -19,6 +19,20 @@ const evidenceBadge = (d: Defect) =>
     ? "border-green-500 text-green-400"
     : "border-amber-500/60 text-amber-400";
 
+const verifyBadge: Record<string, string> = {
+  keep: "border-green-500 text-green-400",
+  downgrade: "border-amber-500/60 text-amber-400",
+  skipped: "border-slate-600 text-slate-500",
+  drop: "border-slate-600 text-slate-500",
+};
+
+const verifyLabel: Record<string, string> = {
+  keep: "VERIFIED",
+  downgrade: "DOWNGRADED",
+  skipped: "SKIPPED",
+  drop: "DROPPED",
+};
+
 export default function DefectCard({
   defect,
   onSeek,
@@ -47,6 +61,14 @@ export default function DefectCard({
           {typeof defect.evidenceFrameIndex === "number" && (
             <span className="font-mono text-slate-500">[frame {defect.evidenceFrameIndex}]</span>
           )}
+        </p>
+      )}
+      {defect.verification && (
+        <p className="mt-2" title={defect.verification.reason}>
+          <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${verifyBadge[defect.verification.verdict] ?? verifyBadge.skipped}`}>
+            {verifyLabel[defect.verification.verdict] ?? defect.verification.verdict.toUpperCase()}
+          </span>{" "}
+          <span className="font-mono text-[11px] text-slate-500">{defect.verification.reason}</span>
         </p>
       )}
       {defect.frameCapture ? (

@@ -1,9 +1,10 @@
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getMetaClient } from "@/lib/meta-client";
-import { SPARK_MODEL } from "@/lib/models";
+import { getSparkClient } from "@/lib/meta-client";
+import { getSparkConfig } from "@/lib/models";
 import { extractFrame } from "@/lib/ffmpeg";
+import { verifyDefects } from "@/lib/verify";
 import {
   MAX_KEY_FRAME_BYTES,
   MAX_KEY_FRAMES,
@@ -34,7 +35,7 @@ import {
 } from "@/lib/store";
 
 // POST /api/generate-report — { sessionId } → SSE:
-// report_started | defect_found (×N) | report_complete.
+// report_started | verify_started | verification_result (×N) | defect_found (×N) | report_complete.
 // 200-stream · 400 nothing to report · 404 session · 502 Spark failure (no fabricated fallback).
 // Key frames are sent to Spark as images (visual ground truth); with no frames
 // (ffmpeg missing / no video) the call degrades to text-only, exactly as before.
@@ -92,6 +93,18 @@ export async function POST(req: Request): Promise<Response> {
   const tagged = getTaggedNotes(sessionId);
   const transcript = getTranscript(sessionId);
 
+  // Resolve the Spark endpoint before streaming: misconfiguration fails fast as
+  // JSON, never as a mid-stream surprise and never as a silent fallback.
+  let spark: ReturnType<typeof getSparkConfig>;
+  try {
+    spark = getSparkConfig();
+  } catch (err) {
+    return NextResponse.json(
+      { error: { code: "spark_misconfigured", message: err instanceof Error ? err.message : "Spark misconfigured." } },
+      { status: 500 },
+    );
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (type: string, data: unknown) => {
@@ -131,7 +144,7 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
 
-        const client = getMetaClient();
+        const client = getSparkClient();
         // Vision message: metadata text first (field names kept), then one
         // FRAME i text marker + image part per key frame, in order. The model
         // cites evidence with evidenceFrameIndex into this same order.
@@ -171,7 +184,7 @@ export async function POST(req: Request): Promise<Response> {
           });
         });
         const res = await client.chat.completions.create({
-          model: SPARK_MODEL,
+          model: spark.model,
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [
@@ -187,27 +200,56 @@ export async function POST(req: Request): Promise<Response> {
         // Envelope-tolerant: models often return just {summary, defects} (or a bare
         // array) and drop the inspection/statistics envelope. Validate the defects —
         // the part that matters — then label evidence server-side (never trust the
-        // model for it), pin visual defects to their cited frame, attach nearest
-        // captures for the rest, add deterministic bbox overlays, and sort.
+        // model for it), verify each visual claim against its cited frame
+        // (keep/downgrade/drop, fully logged), pin survivors to their frames,
+        // attach nearest captures for the rest, add deterministic bbox overlays.
         const rawObj =
           typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
         const summary =
           typeof rawObj.summary === "string" && rawObj.summary ? rawObj.summary : "Inspection complete. See defects below.";
-        const defects = sortDefects(
-          attachOverlayBox(
-            attachFrameCaptures(
-              labelEvidence(validateDefects("defects" in rawObj ? rawObj : raw), frames),
-              frames,
-            ),
-            objects,
-          ),
+        const labeled = labelEvidence(validateDefects("defects" in rawObj ? rawObj : raw), frames);
+
+        // Verification pass (50→65 progress band): the model audits its own visual
+        // findings. Cap 8 calls; voice-only findings and errors never delete.
+        const verifyTotal = Math.min(
+          labeled.filter((d) => d.evidenceSource === "visual").length,
+          8,
         );
+        send("verify_started", { count: verifyTotal });
         updateJobProgress(job.id, 50, 100);
+        const verificationCounts = { kept: 0, downgraded: 0, dropped: 0, skipped: 0 };
+        let verifyDone = 0;
+        const verified = await verifyDefects(labeled, {
+          frames,
+          videoPath,
+          sessionId,
+          client,
+          model: spark.model,
+          cap: 8,
+          checkCancel,
+          onVerdict: (id, v) => {
+            verifyDone++;
+            if (v.verdict === "keep") verificationCounts.kept++;
+            else if (v.verdict === "downgrade") verificationCounts.downgraded++;
+            else if (v.verdict === "drop") verificationCounts.dropped++;
+            else verificationCounts.skipped++;
+            updateJobProgress(
+              job.id,
+              50 + Math.round((verifyDone / Math.max(1, verifyTotal)) * 15),
+              100,
+            );
+            send("verification_result", { id, verdict: v.verdict, reason: v.reason });
+          },
+        });
+
+        const defects = sortDefects(
+          attachOverlayBox(attachFrameCaptures(verified, frames), objects),
+        );
 
         for (let i = 0; i < defects.length; i++) {
           const d = defects[i];
           checkCancel();
-          updateJobProgress(job.id, 50 + Math.round((i / Math.max(1, defects.length)) * 30), 100);
+          updateJobProgress(job.id, 65 + Math.round((i / Math.max(1, defects.length)) * 15), 100);
           // Slim event: full defect (incl. ~0.5MB base64 frames) arrives once at
           // report_complete. Streaming it N times stalls first-paint of progress.
           send("defect_found", {
@@ -234,8 +276,10 @@ export async function POST(req: Request): Promise<Response> {
           },
           summary,
           defects: finalDefects,
-          statistics: rollupStats(finalDefects),
+          statistics: { ...rollupStats(finalDefects), verification: verificationCounts },
           generatedAt: now,
+          // Provenance: which Spark endpoint wrote these defects.
+          modelRun: { provider: spark.provider, model: spark.model },
         };
 
         setReport(sessionId, report);
