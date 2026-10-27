@@ -587,16 +587,42 @@ export interface AssetBenchReport {
     skipped: number;
     errored: number;
   };
-  detection: PRF & { falsePositivesOnClean: number; unit: string; unavailable: boolean; reason?: string };
+  detection: PRF & { falsePositivesOnClean: number; unit: string; unavailable: boolean; reason?: string; partial?: boolean };
   perClass: Record<string, PRF>;
   perScene: Record<string, PRF & { cases: number }>;
   perEpisode: Array<{ episodeId: string; scene: string; cases: string[]; status: "tp" | "fp" | "fn" | "excluded" | "unpredicted" | "not_evaluated" }>;
   association: { evaluated: number; correct: number; accuracy: number | null; unresolved: number; unresolvedRate: number | null; unavailable: boolean; reason?: string };
   evidenceFrame: { evaluated: number; correct: number; accuracy: number | null; unavailable: boolean; reason?: string };
   localization: { evaluated: number; correct: number; accuracy: number | null; unavailable: boolean; reason?: string };
+  /**
+   * Asset-strip overlap diagnostic (static path only): IoU of model
+   * damage-region boxes against whole-asset GT strips, frame-matched.
+   * Engineering signal only — NEVER defect-localization accuracy, since the
+   * two box types annotate different targets. Absent on non-static paths.
+   */
+  assetOverlap?: {
+    evaluated: number;
+    overlapping: number;
+    invalid: number;
+    missing: number;
+    note: string;
+  };
   voiceMatching: { evaluated: number; correct: number; accuracy: number | null; unavailable: boolean; reason: string };
   verification: { kept: number; downgraded: number; dropped: number; skipped: number; errors: number; unavailable: boolean; reason?: string };
   coverage: { assetsPresent: number; assetsTracked: number | null; assetsRepresented: number | null; note: string };
+  /**
+   * Frame-execution coverage (static path only). evaluatedFrames counts GT
+   * frames with manifest execution evidence or explicit prediction records;
+   * expectedFrames counts every GT frame. Until complete, the report status
+   * is not-evaluated and detection metrics are partial (see detection.partial).
+   */
+  evaluationCoverage?: {
+    evaluatedFrames: number;
+    expectedFrames: number;
+    complete: boolean;
+    unevaluatedFrames: string[];
+    note: string;
+  };
   unmappablePredictions: { count: number; caseIds: string[]; note: string };
   cases: BenchReport["cases"];
   limitations: string[];
@@ -1784,7 +1810,7 @@ export function verifyFrameCoverage(manifest: unknown, frameIds: string[]): { co
 export function scoreStaticBenchmark(
   groundTruth: RealGroundTruth[],
   predictions: StaticPrediction[] | null | undefined,
-  opts: { datasetVersion?: string } = {},
+  opts: { datasetVersion?: string; executedFrames?: string[] } = {},
 ): AssetBenchReport {
   const gt = [...groundTruth].sort((a, b) => (a.caseId < b.caseId ? -1 : a.caseId > b.caseId ? 1 : 0));
   const excluded = (c: RealGroundTruth) => (c.excludedFrom ?? []).includes("detection");
@@ -1798,6 +1824,33 @@ export function scoreStaticBenchmark(
       excludedCount,
     });
   }
+
+  // ---- Coverage: which frames were actually evaluated? ----
+  // A frame counts as evaluated when the run manifest records a completed
+  // stage for it, OR when an explicit prediction record names it (a mapped
+  // output is itself evidence the frame was seen). A frame with neither —
+  // e.g. a clean frame in a partial run — was never evaluated: it must read
+  // not_evaluated, never clean-PASS and never FN. Without execution evidence
+  // (no manifest: unit fixtures, manifest-less cached artifacts) every frame
+  // is treated as evaluated, preserving the historical contract.
+  const expectedFrames = Array.from(new Set(gt.map((c) => c.frameId))).sort();
+  const executed = opts.executedFrames !== undefined ? new Set(opts.executedFrames) : null;
+  const activePredsEarly = [...predictions].filter((p) => !p.skipped && !p.error);
+  const predictedFrames = new Set(activePredsEarly.map((p) => p.frameId));
+  const isEvaluated = (frameId: string): boolean =>
+    executed === null || executed.has(frameId) || predictedFrames.has(frameId);
+  const unevaluatedFrames = expectedFrames.filter((f) => !isEvaluated(f));
+  const coverageComplete = unevaluatedFrames.length === 0;
+  const notEvaluatedRow = (c: RealGroundTruth): BenchReport["cases"][number] => ({
+    caseId: c.caseId,
+    scene: c.scene,
+    passed: false,
+    skipped: true,
+    errored: false,
+    expected: c.clean ? "clean (no defect)" : `${c.assetCategory}:${c.defectClass} episode=${c.episodeId ?? "n/a"}`,
+    predicted: `not evaluated — frame ${c.frameId} not executed in this run`,
+    mismatches: [],
+  });
 
   const preds = [...predictions];
   const scored = gt.filter((c) => !excluded(c));
@@ -1848,8 +1901,6 @@ export function scoreStaticBenchmark(
     unmappable.length > 0
       ? `no mapped prediction (${unmappable.length} unmappable prediction(s) reference unknown frames — see unmappablePredictions)`
       : null;
-  let locEval = 0;
-  let locCorrect = 0;
   let kept = 0;
   let downgraded = 0;
   let dropped = 0;
@@ -1867,10 +1918,12 @@ export function scoreStaticBenchmark(
     if (p.error) errors++;
   };
 
-  const reliableBoxOf = (members: RealGroundTruth[]): BoundingBox | null =>
-    members.find((m) => m.bbox && m.bboxReliable)?.bbox ?? null;
-
   const consumedPred = new Set<StaticPrediction>();
+  // Detection matches on frame + category + visual evidence ONLY. Bounding
+  // boxes never gate detection: the model is asked for the visibly damaged
+  // region while GT annotates the whole asset strip, so IoU between those two
+  // target types cannot decide whether the defect was found. Box handling
+  // lives in the asset-overlap diagnostic below, never in this gate.
   for (const [ep, members] of Array.from(episodes.entries()).sort(([a], [b]) => (a < b ? -1 : 1))) {
     const rep = members[0];
     const scene = rep.scene;
@@ -1881,13 +1934,12 @@ export function scoreStaticBenchmark(
     for (const p of candidates) {
       const catOk = labelsMatch(p.category, rep.assetCategory) && (labelsMatch(p.defectClass, rep.defectClass) || norm(p.defectClass) === "");
       const frameOk = p.evidenceSource === "visual";
-      const gtBox = reliableBoxOf(members);
-      const boxValid = p.bbox !== null && p.bbox !== undefined && isValidNormBox(p.bbox);
-      if (!boxValid && p.bbox !== null && p.bbox !== undefined) {
-        missReason = `invalid bbox on ${p.frameId} (localization unavailable; finding preserved, not scored as localized)`;
+      if (!catOk || !frameOk) {
+        missReason = !catOk
+          ? `category mismatch on ${p.frameId} (got ${p.category}:${p.defectClass}, want ${rep.assetCategory}:${rep.defectClass}; box overlap never substitutes)`
+          : `non-visual evidence on ${p.frameId} (a matching box alone never counts)`;
+        continue;
       }
-      const boxOk = gtBox === null ? true : boxValid && iou(p.bbox as BoundingBox, gtBox) >= BENCH_IOU_THRESHOLD;
-      if (!catOk || !frameOk || !boxOk) continue;
       hit = p;
       break;
     }
@@ -1898,10 +1950,29 @@ export function scoreStaticBenchmark(
       consumedPred.add(hit);
       perEpisode.push({ episodeId: ep, scene, cases: members.map((m) => m.caseId), status: "tp" });
       tallyV(hit);
+      // Further matching observations of the same episode: consumed as
+      // observed (verification tallied) but never a second TP — so a repeat
+      // sighting of the defect can never become a false positive merely
+      // because a different, clean asset shares the frame.
+      for (const p of candidates) {
+        if (p === hit || consumedPred.has(p)) continue;
+        const extraOk =
+          labelsMatch(p.category, rep.assetCategory) &&
+          (labelsMatch(p.defectClass, rep.defectClass) || norm(p.defectClass) === "") &&
+          p.evidenceSource === "visual";
+        if (extraOk) {
+          consumedPred.add(p);
+          tallyV(p);
+        }
+      }
       for (const m of members) {
+        if (!isEvaluated(m.frameId)) {
+          caseRows.push(notEvaluatedRow(m));
+          continue;
+        }
         caseRows.push({ caseId: m.caseId, scene: m.scene, passed: true, skipped: false, errored: false, expected: `${rep.assetCategory}:${rep.defectClass} episode=${ep}`, predicted: `${hit.category}:${hit.defectClass} @${hit.frameId}${hit.bbox ? " with box" : ""}`, mismatches: [] });
       }
-    } else {
+    } else if (members.some((m) => isEvaluated(m.frameId))) {
       fn++;
       bumpC(norm(rep.assetCategory), "fn");
       bumpS(scene, "fn");
@@ -1918,14 +1989,28 @@ export function scoreStaticBenchmark(
         }
       }
       for (const m of members) {
-        caseRows.push({ caseId: m.caseId, scene: m.scene, passed: false, skipped: false, errored: false, expected: `${rep.assetCategory}:${rep.defectClass} episode=${ep}`, predicted: candidates.length ? "prediction present but category/frame/box gates failed" : (unmappedNote ?? "no prediction (unavailable)"), mismatches: candidates.length ? [missReason ?? "no candidate satisfied category + frame-visibility + IoU gates"] : [unmappedNote ?? "missing prediction for defective episode"] });
+        if (!isEvaluated(m.frameId)) {
+          caseRows.push(notEvaluatedRow(m));
+          continue;
+        }
+        caseRows.push({ caseId: m.caseId, scene: m.scene, passed: false, skipped: false, errored: false, expected: `${rep.assetCategory}:${rep.defectClass} episode=${ep}`, predicted: candidates.length ? "prediction present but category/frame gates failed" : (unmappedNote ?? "no prediction (unavailable)"), mismatches: candidates.length ? [missReason ?? "no candidate satisfied category + frame-visibility gates (boxes never gate detection)"] : [unmappedNote ?? "missing prediction for defective episode"] });
       }
+    } else {
+      // No member frame was ever executed: not a miss, not a failure.
+      // Never FN, never FP — the episode is simply unevaluated.
+      perEpisode.push({ episodeId: ep, scene, cases: members.map((m) => m.caseId), status: "not_evaluated" });
+      for (const m of members) caseRows.push(notEvaluatedRow(m));
     }
   }
 
   // Clean scored cases: any active prediction on the same frame = FP.
+  // Frames never executed are not_evaluated — never clean-PASS.
   for (const c of scored) {
     if (!c.clean) continue;
+    if (!isEvaluated(c.frameId)) {
+      caseRows.push(notEvaluatedRow(c));
+      continue;
+    }
     const list = preds.filter((p) => !p.skipped && !p.error && p.frameId === c.frameId);
     for (const p of list) {
       if (consumedPred.has(p)) continue;
@@ -1939,40 +2024,55 @@ export function scoreStaticBenchmark(
     const errorHere = preds.some((p) => p.frameId === c.frameId && p.error);
     if (skippedHere) skipped++;
     if (errorHere) errored++;
+    // Attribution matters: predictions consumed as episode observations belong
+    // to the defective case. Only unattributed predictions fail the clean case.
+    const unattributed = list.filter((p) => !consumedPred.has(p));
     caseRows.push({
       caseId: c.caseId,
       scene: c.scene,
-      passed: list.length === 0,
+      passed: unattributed.length === 0,
       skipped: skippedHere,
       errored: errorHere,
       expected: "clean (no defect)",
-      predicted: list.length ? list.map((p) => `${p.category}:${p.defectClass}`).join(" | ") : "no prediction",
-      mismatches: list.length ? [`expected clean, got ${list.length} prediction(s)`] : [],
+      predicted:
+        unattributed.length > 0
+          ? unattributed.map((p) => `${p.category}:${p.defectClass}`).join(" | ")
+          : list.length > 0
+            ? "prediction(s) attributed to the co-located defective case (not scored here)"
+            : "no prediction",
+      mismatches: unattributed.length ? [`expected clean, got ${unattributed.length} prediction(s)`] : [],
     });
   }
 
-  // Localization: evaluated over active visual predictions carrying a box on
-  // defective-episode frames where ground truth has a reliable box. Invalid
-  // boxes never count as correct; missing boxes are not evaluated here (the
-  // detection gate already withholds TP without a usable box).
-  const reliableEpisodeBoxes = new Map<string, BoundingBox>();
-  episodes.forEach((members, ep) => {
-    const b = reliableBoxOf(members);
-    if (b) reliableEpisodeBoxes.set(ep, b);
-  });
-  const episodeOfFrame = new Map<string, string>();
-  episodes.forEach((members, ep) => {
-    for (const m of members) episodeOfFrame.set(m.frameId, ep);
-  });
+  // Asset-strip overlap diagnostic (NOT defect-localization accuracy): the model
+  // reports the visibly damaged region while GT annotates the whole asset
+  // strip. IoU across those target types is reported here frame-matched for
+  // engineering signal only — it never gates detection and is never presented
+  // as localization accuracy. Invalid or missing model boxes are counted as
+  // such: never repaired, never substituted, never scored as overlapping.
+  const frameBoxOf = new Map<string, BoundingBox>();
+  for (const c of scored) {
+    if (!c.clean && c.bbox && c.bboxReliable && isValidNormBox(c.bbox) && !frameBoxOf.has(c.frameId)) {
+      frameBoxOf.set(c.frameId, c.bbox);
+    }
+  }
+  let overlapEval = 0;
+  let overlapHit = 0;
+  let overlapInvalid = 0;
+  let overlapMissing = 0;
   for (const p of preds) {
-    if (p.skipped || p.error || p.evidenceSource !== "visual" || p.bbox === null || p.bbox === undefined) continue;
-    const ep = episodeOfFrame.get(p.frameId);
-    if (!ep) continue;
-    const gtBox = reliableEpisodeBoxes.get(ep);
-    if (!gtBox) continue;
-    if (!isValidNormBox(p.bbox)) continue;
-    locEval++;
-    if (iou(p.bbox, gtBox) >= BENCH_IOU_THRESHOLD) locCorrect++;
+    if (p.skipped || p.error || p.evidenceSource !== "visual") continue;
+    if (!frameBoxOf.has(p.frameId)) continue;
+    if (p.bbox === null || p.bbox === undefined) {
+      overlapMissing++;
+      continue;
+    }
+    if (!isValidNormBox(p.bbox)) {
+      overlapInvalid++;
+      continue;
+    }
+    overlapEval++;
+    if (iou(p.bbox, frameBoxOf.get(p.frameId) as BoundingBox) >= BENCH_IOU_THRESHOLD) overlapHit++;
   }
 
   // Excluded cases: reported, never scored.
@@ -1999,7 +2099,12 @@ export function scoreStaticBenchmark(
 
   const assets = new Set(gt.map((c) => c.assetId)).size;
   const failedCases = caseRows.filter((c) => !c.passed && !c.skipped);
-  const status: BenchStatus = failedCases.length === 0 ? "scored-pass" : "scored-fail";
+  // Partial runs never report a whole-benchmark verdict: without full frame
+  // coverage the report is explicitly not-evaluated (exit 2), with the valid
+  // evaluated-frame metrics retained below and labeled partial.
+  const status: BenchStatus = !coverageComplete
+    ? "not-evaluated"
+    : failedCases.length === 0 ? "scored-pass" : "scored-fail";
   return {
     mode: "asset-benchmark",
     realInference: false,
@@ -2025,16 +2130,43 @@ export function scoreStaticBenchmark(
       skipped,
       errored,
     },
-    detection: { ...prf(tp, fp, fn), falsePositivesOnClean: fpOnClean, unit: "defect episode (asset occurrence); adjacent frames of one episode count once", unavailable: false },
+    detection: {
+      ...prf(tp, fp, fn),
+      falsePositivesOnClean: fpOnClean,
+      unit: coverageComplete
+        ? "defect episode (asset occurrence); adjacent frames of one episode count once"
+        : "PARTIAL RUN — defect episodes over evaluated frames only; unexecuted frames excluded, full-benchmark verdict withheld",
+      unavailable: false,
+      ...(coverageComplete ? {} : {
+        partial: true,
+        reason: `partial run: ${expectedFrames.length - unevaluatedFrames.length} of ${expectedFrames.length} frames evaluated; metrics cover evaluated frames only`,
+      }),
+    },
     perClass: perClassOut,
     perScene: perSceneOut,
     perEpisode,
     association: { evaluated: 0, correct: 0, accuracy: null, unresolved: 0, unresolvedRate: null, unavailable: true, reason: "static-image path emits no stable asset identity; association is never inferred from category strings" },
     evidenceFrame: { evaluated: 0, correct: 0, accuracy: null, unavailable: true, reason: "static-image path is frame-bound by construction; frame-defect match is folded into detection, not scored separately" },
-    localization: { evaluated: locEval, correct: locCorrect, accuracy: locEval > 0 ? locCorrect / locEval : null, unavailable: false, reason: locEval === 0 ? "no scored visual box predictions on episodes with reliable ground-truth boxes" : undefined },
+    localization: { evaluated: 0, correct: 0, accuracy: null, unavailable: true, reason: "ground-truth boxes annotate the whole foreground asset strip while the model is asked for the visibly damaged region; IoU across different target types cannot verify defect-localization accuracy" },
+    assetOverlap: {
+      evaluated: overlapEval,
+      overlapping: overlapHit,
+      invalid: overlapInvalid,
+      missing: overlapMissing,
+      note: "asset-strip overlap diagnostic: IoU of model damage-region boxes against whole-asset GT strips, frame-matched per prediction; engineering signal only, NOT defect-localization accuracy",
+    },
     voiceMatching: { evaluated: 0, correct: 0, accuracy: null, unavailable: true, reason: "static-image benchmark: no voice notes; tracking and note-interval alignment are not applicable" },
     verification: { kept, downgraded, dropped, skipped: skippedV, errors, unavailable: false },
     coverage: { assetsPresent: assets, assetsTracked: null, assetsRepresented: null, note: "Static images: assets present are annotated; tracked/represented are NOT APPLICABLE (no video tracking ran). Being present is not inspection." },
+    evaluationCoverage: {
+      evaluatedFrames: expectedFrames.length - unevaluatedFrames.length,
+      expectedFrames: expectedFrames.length,
+      complete: coverageComplete,
+      unevaluatedFrames,
+      note: coverageComplete
+        ? "full frame coverage: every benchmark frame carries execution evidence"
+        : "PARTIAL RUN: unexecuted frames are not_evaluated (never clean-PASS, never FN); detection metrics cover evaluated frames only and no whole-benchmark verdict is reported",
+    },
     unmappablePredictions: {
       count: unmappable.length,
       caseIds: Array.from(new Set(unmappable.map((p) => p.frameId))).sort(),
@@ -2044,7 +2176,7 @@ export function scoreStaticBenchmark(
     limitations: [
       "Single-image defect detection only: no SAM tracking, no temporal selection, no voice-note alignment, and no complete GridSight inspection workflow are measured here.",
       "Primary detection unit is the defect episode; adjacent frames of one episode count once. Frame-level views are listed per episode, never as independent detections.",
-      "Boxes are validated server-side against the submitted image; invalid or missing boxes withhold localization (and the TP when ground truth requires localization) without failing the finding.",
+      "Boxes are validated server-side against the submitted image; invalid or missing boxes are counted as such in the asset-overlap diagnostic and never gate detection, which matches on frame, category, and visual evidence only.",
       "Association is never inferred: predictions carry no stable asset IDs, so asset-association accuracy is unavailable by design.",
       "Uncertain annotations are excluded from detection and reported separately, never counted as success.",
       "Hand-authored test predictions (provenance hand-test) validate the scorer only and are never evidence of model performance.",

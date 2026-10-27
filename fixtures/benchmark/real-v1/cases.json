@@ -242,16 +242,16 @@
       "defectClass": "rust",
       "visualDescription": "Tall metal pole in left foreground; heavy reddish-brown rust streaking on its lower section.",
       "bbox": {
-        "x": 0.135,
+        "x": 0.22,
         "y": 0.0,
-        "w": 0.06,
+        "w": 0.04,
         "h": 1.0
       },
       "bboxReliable": true,
       "observability": "observable",
       "episodeId": "EP-RUST-POLE-01",
       "excludedFrom": [],
-      "annotationNotes": "Defect episode EP-RUST-POLE-01 (4 frames: R-08, R-09, R-10, R-12). Box is an annotator visual estimate of the foreground pole strip, reliable for IoU 0.5 demonstration, not survey-grade."
+      "annotationNotes": "Defect episode EP-RUST-POLE-01 (4 frames: R-08, R-09, R-10, R-12). Box is an annotator visual estimate of the foreground pole strip, reliable for IoU 0.5 demonstration, not survey-grade. gt-v2 correction (2026-10-28): moved from {x:0.135,w:0.06} to {x:0.22,w:0.04} — the gt-v1 strip sat ~110px left of the shaft (over sky/trees/fence), confirmed by per-row luminance edge scans and full-image overlay review. Per-frame placement accounts for Ken Burns crop drift; whole-strip semantics unchanged. gt-v3 (2026-10-28): episode now 5 observations (R-08, R-09, R-10, R-12, R-13) — f028's pole added as R-13; still one episode, one detection instance."
     },
     {
       "caseId": "R-09",
@@ -265,16 +265,16 @@
       "defectClass": "rust",
       "visualDescription": "Same rust-streaked foreground pole, slightly shifted Ken Burns crop.",
       "bbox": {
-        "x": 0.135,
+        "x": 0.224,
         "y": 0.0,
-        "w": 0.06,
+        "w": 0.044,
         "h": 1.0
       },
       "bboxReliable": true,
       "observability": "observable",
       "episodeId": "EP-RUST-POLE-01",
       "excludedFrom": [],
-      "annotationNotes": "Same episode as R-08. Adjacent-frame repeat; primary metrics count the episode once."
+      "annotationNotes": "Same episode as R-08. Adjacent-frame repeat; primary metrics count the episode once. gt-v2 correction (2026-10-28): moved from {x:0.135,w:0.06} to {x:0.224,w:0.044} — same gt-v1 misplacement as R-08 (strip off the shaft); re-measured for this frame's crop (shaft at ~293-342px). Whole-strip semantics unchanged."
     },
     {
       "caseId": "R-10",
@@ -288,16 +288,16 @@
       "defectClass": "rust",
       "visualDescription": "Same foreground pole; rust still clearly visible.",
       "bbox": {
-        "x": 0.135,
+        "x": 0.228,
         "y": 0.0,
-        "w": 0.06,
+        "w": 0.044,
         "h": 1.0
       },
       "bboxReliable": true,
       "observability": "observable",
       "episodeId": "EP-RUST-POLE-01",
       "excludedFrom": [],
-      "annotationNotes": "Same episode. Three or more views of one defect must not become three true positives."
+      "annotationNotes": "Same episode. Three or more views of one defect must not become three true positives. gt-v2 correction (2026-10-28): moved from {x:0.135,w:0.06} to {x:0.228,w:0.044} — same gt-v1 misplacement as R-08 (strip off the shaft); re-measured for this frame's crop (shaft at ~292-347px). Whole-strip semantics unchanged."
     },
     {
       "caseId": "R-11",
@@ -329,16 +329,39 @@
       "defectClass": "rust",
       "visualDescription": "Same foreground pole near end of the derived clip; rust visible.",
       "bbox": {
-        "x": 0.135,
+        "x": 0.232,
         "y": 0.0,
-        "w": 0.06,
+        "w": 0.047,
         "h": 1.0
       },
       "bboxReliable": true,
       "observability": "observable",
       "episodeId": "EP-RUST-POLE-01",
       "excludedFrom": [],
-      "annotationNotes": "Final view of EP-RUST-POLE-01. Five frames, one episode, one detection instance."
+      "annotationNotes": "Final view of EP-RUST-POLE-01. Four frames, one episode, one detection instance. gt-v2 correction (2026-10-28): moved from {x:0.135,w:0.06} to {x:0.232,w:0.047} — same gt-v1 misplacement as R-08 (strip off the shaft); re-measured for this frame's crop (shaft at ~298-357px). Whole-strip semantics unchanged. gt-v3 (2026-10-28): episode now 5 observations with f028's pole added as R-13; still one episode, one detection instance."
+    },
+    {
+      "caseId": "R-13",
+      "scene": "slunj-yard",
+      "sourceMediaId": "eval-f028",
+      "frameId": "f028",
+      "timestamp": 27,
+      "assetId": "rust-pole-foreground",
+      "assetCategory": "pole",
+      "clean": false,
+      "defectClass": "rust",
+      "visualDescription": "Same rust-streaked foreground pole as EP-RUST-POLE-01, sharing frame f028 with the clean fence row (R-11); reddish-brown rust streaking on its lower section.",
+      "bbox": {
+        "x": 0.242,
+        "y": 0.0,
+        "w": 0.031,
+        "h": 1.0
+      },
+      "bboxReliable": true,
+      "observability": "observable",
+      "episodeId": "EP-RUST-POLE-01",
+      "excludedFrom": [],
+      "annotationNotes": "gt-v3 addition (2026-10-28): f028 carried only the clean fence case (R-11) while labels.json and the image both show the rusted foreground pole — a missing same-frame asset annotation. New case links f028's pole to EP-RUST-POLE-01 (now 5 observations, still one episode, one detection instance). Box measured independently for this crop (shaft at ~311-349px via sky-band luminance scans + 3x crop inspection + full-image overlay review); whole-strip semantics, same method as gt-v2. R-11 unchanged: the clean fence row coexists in this frame."
     }
   ]
 }

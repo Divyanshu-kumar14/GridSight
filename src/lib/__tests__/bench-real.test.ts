@@ -44,15 +44,15 @@ const pred = (over: Partial<RealPrediction> & { caseId: string }): RealPredictio
 });
 
 describe("real dataset validation", () => {
-  it("accepts the shipped real-v1 file with 12 cases, 3 scenes, 7 assets, 1 episode", () => {
+  it("accepts the shipped real-v1 file with 13 cases, 3 scenes, 6 assets, 1 episode", () => {
     const raw = JSON.parse(readFileSync(join(process.cwd(), "fixtures/benchmark/real-v1/cases.json"), "utf8"));
     const stats = validateRealDataset(raw.cases);
-    expect(raw.cases).toHaveLength(12);
+    expect(raw.cases).toHaveLength(13);
     expect(stats.scenes).toBe(3);
     expect(stats.assets).toBe(6);
     expect(stats.episodes).toBe(1);
     const ids = new Set(raw.cases.map((c: { caseId: string }) => c.caseId));
-    expect(ids.size).toBe(12);
+    expect(ids.size).toBe(13);
   });
 
   it("fails clearly on duplicate IDs, invalid boxes, and bad frame refs", () => {

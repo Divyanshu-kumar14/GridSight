@@ -319,6 +319,28 @@ async function main(): Promise<void> {
           }
         }
         artifact = validated.predictions;
+        // Coverage evidence: frames with a completed execution stage in the
+        // attached run manifest. A completed stage (inference or cache reuse)
+        // proves the frame was evaluated — including zero-finding frames that
+        // contribute no predictions. Frames with neither a stage nor a
+        // prediction are not_evaluated, never clean passes. No manifest means
+        // no coverage evidence: every frame is treated as evaluated (the
+        // artifact envelope itself claims a completed run).
+        const executedFrames = (() => {
+          const run = validated.run;
+          if (run === null || run === undefined) return undefined;
+          if (!isRecord(run) || !Array.isArray((run as { stages?: unknown }).stages)) return [];
+          const ids: string[] = [];
+          for (const s of (run as { stages: unknown[] }).stages) {
+            if (!isRecord(s)) continue;
+            const key = (s as { key?: unknown }).key;
+            if (typeof key === "string" && key.startsWith("frame:") && (s as { status?: unknown }).status === "completed") {
+              ids.push(key.slice("frame:".length));
+            }
+          }
+          return ids;
+        })();
+        return scoreStaticBenchmark(gt, artifact, { datasetVersion: parsed.datasetVersion, executedFrames });
       }
       return scoreStaticBenchmark(gt, artifact, { datasetVersion: parsed.datasetVersion });
     };
@@ -329,16 +351,26 @@ async function main(): Promise<void> {
       report = scoreAssetPath();
     }
     const status: BenchStatus = report.status;
+    // Partial runs are not-evaluated WITH predictions: label coverage
+    // explicitly so a subset run can never read as a whole-benchmark verdict.
+    const coverage = report.evaluationCoverage;
     const statusLine =
-      status === "not-evaluated"
-        ? "STATUS: NOT EVALUATED — ground truth available, no prediction artifact; model accuracy NOT measured"
-        : status === "scored-pass"
-          ? "STATUS: PASS — scored benchmark met acceptance criteria"
-          : "STATUS: FAIL — scored benchmark did not meet acceptance criteria";
+      coverage !== undefined && !coverage.complete
+        ? `STATUS: PARTIAL — ${coverage.evaluatedFrames} of ${coverage.expectedFrames} frames evaluated; full-benchmark PASS/FAIL withheld (exit 2)`
+        : status === "not-evaluated"
+          ? "STATUS: NOT EVALUATED — ground truth available, no prediction artifact; model accuracy NOT measured"
+          : status === "scored-pass"
+            ? "STATUS: PASS — scored benchmark met acceptance criteria"
+            : "STATUS: FAIL — scored benchmark did not meet acceptance criteria";
     console.log(statusLine);
+    if (coverage !== undefined && !coverage.complete) {
+      console.log(
+        `coverage: PARTIAL — ${coverage.evaluatedFrames} of ${coverage.expectedFrames} frames evaluated; not evaluated [${coverage.unevaluatedFrames.join(", ")}] — metrics cover evaluated frames only`,
+      );
+    }
     if (scoring === "static") {
       console.log(
-        "scoring: static single-image (frame-linked predictions, IoU localization where GT boxes are reliable; no asset association, no tracking)",
+        "scoring: static single-image (frame-linked predictions, detection on frame + category + visual evidence; defect localization unavailable — GT strips and model damage boxes annotate different targets; no asset association, no tracking)",
       );
     }
     console.log(
