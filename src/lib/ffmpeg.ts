@@ -29,6 +29,18 @@ export async function probeDurationSec(videoPath: string): Promise<number> {
   }
 }
 
+// Key frames go to a multimodal model, not to a viewer: a 4K JPEG is ~2MB and
+// base64 inflates it 33%, so 8 frames would exceed typical request limits.
+// 1280px long edge at q=4 is ~60–150KB — still enough to see corrosion/cracks.
+export const KEY_FRAME_MAX_EDGE = 1280;
+export const KEY_FRAME_QUALITY = 4;
+
+// Pure: the scale filter is the whole fix — keep it testable so nobody
+// "simplifies" it back to full resolution.
+export function buildKeyFrameFilter(maxEdge: number = KEY_FRAME_MAX_EDGE): string {
+  return `scale='min(${maxEdge},iw)':-2`;
+}
+
 export async function extractFrame(
   videoPath: string,
   timestampSec: number,
@@ -46,6 +58,10 @@ export async function extractFrame(
       videoPath,
       "-frames:v",
       "1",
+      "-vf",
+      buildKeyFrameFilter(),
+      "-q:v",
+      String(KEY_FRAME_QUALITY),
       outPath,
     ]);
     return outPath;

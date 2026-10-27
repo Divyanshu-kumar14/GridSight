@@ -1,10 +1,11 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getMetaClient } from "@/lib/meta-client";
 import { SPARK_MODEL } from "@/lib/models";
 import { extractFrame } from "@/lib/ffmpeg";
 import {
+  MAX_KEY_FRAME_BYTES,
   MAX_KEY_FRAMES,
   REPORT_SYSTEM_PROMPT,
   attachFrameCaptures,
@@ -115,6 +116,13 @@ export async function POST(req: Request): Promise<Response> {
             try {
               const out = `${scratchDir()}/frames/${sessionId}-key-${i}.jpg`;
               await extractFrame(videoPath, stamps[i], out);
+              const { size } = await stat(out);
+              if (size > MAX_KEY_FRAME_BYTES) {
+                console.error(
+                  `key frame ${i} skipped: ${size}B exceeds ${MAX_KEY_FRAME_BYTES}B budget`,
+                );
+                continue;
+              }
               const b64 = await readFile(out, "base64");
               frames.push({ timestamp: stamps[i], base64: b64 });
             } catch (e) {

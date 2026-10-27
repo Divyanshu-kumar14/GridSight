@@ -203,6 +203,10 @@ export function attachOverlayBox(defects: Defect[], objects: TrackedObject[]): D
 // Key-frame picks: first-seen timestamp per object, capped (cost/latency guard).
 export const MAX_KEY_FRAMES = 8;
 
+// Hard ceiling per encoded frame. extractFrame downscales to ~60–150KB; anything
+// bigger means the filter did not apply, and shipping it would blow the request.
+export const MAX_KEY_FRAME_BYTES = 400_000;
+
 export function pickKeyTimestamps(objects: TrackedObject[], tagged: TaggedNote[]): number[] {
   const mentioned = new Set(tagged.map((t) => t.matchedAssetId).filter(Boolean) as string[]);
   const ranked = [...objects].sort((a, b) => {
