@@ -1,5 +1,8 @@
-// GET /api/health → { ok, ffmpeg, dbWritable, version }. No auth, no secrets.
+// GET /api/health → { ok, ffmpeg, dbWritable, version, modelProvider, modelId }.
+// No auth, no secrets (key names/values never leave the server).
 // ffmpeg: ffprobe runs. dbWritable: a temp row writes to the scratch dir.
+// modelProvider/modelId: resolved Spark endpoint (best-effort; "unconfigured"
+// when the provider's required env is missing — health itself must not throw).
 // Used by the Dockerfile HEALTHCHECK and judges hitting the live URL.
 
 import { execFile } from "node:child_process";
@@ -8,6 +11,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { DatabaseSync } from "node:sqlite";
+import { getSparkConfig } from "@/lib/models";
 import { ensureScratchDirs, scratchDir } from "@/lib/store";
 
 const execFileAsync = promisify(execFile);
@@ -56,9 +60,18 @@ export async function GET(): Promise<NextResponse> {
     dbWritable(),
     appVersion(),
   ]);
+  let modelProvider = process.env.SPARK_PROVIDER || "meta";
+  let modelId = "unconfigured";
+  try {
+    const spark = getSparkConfig();
+    modelProvider = spark.provider;
+    modelId = spark.model;
+  } catch {
+    // Keep health green/red on ffmpeg+db only; provider config has its own errors.
+  }
   const ok = ffmpeg && writable;
   return NextResponse.json(
-    { ok, ffmpeg, dbWritable: writable, version },
+    { ok, ffmpeg, dbWritable: writable, version, modelProvider, modelId },
     { status: ok ? 200 : 503 },
   );
 }

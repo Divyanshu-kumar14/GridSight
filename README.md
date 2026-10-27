@@ -5,7 +5,7 @@ One 24-second substation pass holds 32 trackable assets across 4,352 frames — 
 What the AI does with your footage (four Meta models, one line each):
 - **Eyes** (`sam-3.1`) — tracks every asset across the video in one pass, with native-frame timestamps.
 - **Ears** (`muse-voice-transcribe-1.0`) — diarizes drive-back voice memos into timestamped segments.
-- **Analyst** (`muse-spark-1.3`) — looks at the actual key frames, aligns notes to assets, writes the report as structured JSON.
+- **Analyst** (`muse-spark-1.3` on Meta, Muse Spark Open via `SPARK_PROVIDER`) — looks at the actual key frames, aligns notes to assets, writes the report as structured JSON.
 - **Marker** (deterministic, no model) — pins each defect to its tracked bounding box on the real frame. No painted damage, ever.
 
 Out comes a severity-ranked report where every finding is tagged **VISUAL** (cited frame) or **VOICE ONLY** (your words, unverified) — exportable as CSV.
@@ -59,6 +59,10 @@ All in `.env.local` (never committed; `specs/` is also gitignored):
 | Variable             | Purpose                                                        |
 |----------------------|----------------------------------------------------------------|
 | `MODEL_API_KEY`      | Meta API key (vision + language)                               |
+| `SPARK_PROVIDER`     | Spark endpoint: `meta` (default) `baseten` `modal` — env only |
+| `SPARK_MODEL`        | Model override for `meta` (default `muse-spark-1.3`)           |
+| `BASETEN_API_KEY`    | Key for `SPARK_PROVIDER=baseten` (Muse Spark Open)             |
+| `MODAL_BASE_URL` / `MODAL_MODEL` / `MODAL_API_KEY` | Required for `SPARK_PROVIDER=modal` |
 | `NEXT_PUBLIC_APP_URL`| Public URL, default `http://localhost:3000`                    |
 | `USE_CACHED`         | `"true"` serves frozen fixtures, zero API burn (offline demo) |
 | `GRIDSIGHT_TMP_DIR`  | Scratch dir override (default `/tmp/opencode/gridsight`)      |
@@ -72,6 +76,16 @@ npx tsx scripts/cache-demo.ts   # freeze a live session into fixtures for offlin
 ```
 
 Fixtures note: `fixtures/demo-session/report.json` is a representative sample, not a captured run — both findings are voice-sourced (`evidenceSource: "voice"`). To capture a real SAM response for the parser test: `npx tsx scripts/capture-sam-sample.ts <file_id> "<prompt>"` (one call, never in CI).
+
+### Spark provider (open-weight prize)
+
+Tagging + report generation can run on Meta's hosted API (default) or on Muse Spark Open served by an inference partner. The choice is stamped on every report (`modelRun`) and shown on the report page and in `/api/health` — that stamp is the prize proof.
+
+```bash
+SPARK_PROVIDER=baseten BASETEN_API_KEY="$KEY" npm run dev
+```
+
+`meta` needs only `MODEL_API_KEY`. `baseten` defaults to `https://inference.baseten.co/v1` and model `meta-models/muse-spark-open-1026` (that exact id — not `meta-spark-open`). `modal` requires `MODAL_BASE_URL` + `MODAL_MODEL` + `MODAL_API_KEY`. Missing keys fail loudly at request time, never by silent fallback. Tracking (SAM), Files, and transcription always stay on Meta.
 
 ## Deploy (Docker)
 

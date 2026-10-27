@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getMetaClient } from "@/lib/meta-client";
-import { SPARK_MODEL } from "@/lib/models";
+import { getSparkClient } from "@/lib/meta-client";
+import { getSparkConfig } from "@/lib/models";
 import {
   TAGGING_SYSTEM_PROMPT,
   buildTaggingPayload,
@@ -77,10 +77,23 @@ export async function POST(req: Request): Promise<NextResponse> {
     return persist(await demoTagged(sessionId), true);
   }
 
+  // Resolve the Spark endpoint before trying: a missing key or bad provider is a
+  // loud 500, never silently absorbed into the deterministic fallback below.
+  let spark: ReturnType<typeof getSparkConfig>;
   try {
-    const client = getMetaClient();
+    spark = getSparkConfig();
+    getSparkClient(); // validates the provider's key now (throws actionable)
+  } catch (err) {
+    return NextResponse.json(
+      { error: { code: "spark_misconfigured", message: err instanceof Error ? err.message : "Spark misconfigured." } },
+      { status: 500 },
+    );
+  }
+
+  try {
+    const client = getSparkClient();
     const res = await client.chat.completions.create({
-      model: SPARK_MODEL,
+      model: spark.model,
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [

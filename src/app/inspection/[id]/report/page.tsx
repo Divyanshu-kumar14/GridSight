@@ -71,6 +71,11 @@ export default function ReportPage() {
           <p className="mt-1 font-mono text-xs text-slate-400">
             {report.inspection.date} · {report.inspection.inspector} · {report.inspection.totalAssetsTracked} assets tracked · {report.inspection.coveragePercent}% coverage
           </p>
+          {report.modelRun && (
+            <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
+              {report.modelRun.model} · {report.modelRun.provider}
+            </p>
+          )}
           <p className="mt-2 text-sm text-slate-300">{report.summary}</p>
           <div className="mt-3">
             <SeverityChart stats={report.statistics} />
