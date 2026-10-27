@@ -8,8 +8,10 @@ const HEADER = [
   "assetId",
   "assetCategory",
   "severity",
+  "evidenceSource",
   "title",
   "frameTimestamp",
+  "observation",
   "recommendedAction",
   "urgency",
   "voiceNoteExcerpt",
@@ -20,6 +22,9 @@ function cell(v: string | number | undefined): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// Evidence provenance must survive export: an assessor reading the CSV has to
+// know whether a row was seen on a frame or only reported by voice. Legacy rows
+// without the field default to "voice" — never claim visual evidence we lack.
 export function buildReportCsv(report: DefectReport): string {
   const lines = [HEADER.join(",")];
   for (const d of report.defects) {
@@ -29,8 +34,10 @@ export function buildReportCsv(report: DefectReport): string {
         cell(d.assetId),
         cell(d.assetCategory),
         cell(d.severity),
+        cell(d.evidenceSource ?? "voice"),
         cell(d.title),
         cell(d.frameTimestamp),
+        cell(d.observation ?? ""),
         cell(d.recommendedAction),
         cell(d.estimatedUrgency),
         cell(d.voiceNoteExcerpt ?? ""),

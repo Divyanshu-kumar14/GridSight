@@ -34,7 +34,7 @@ describe("buildReportCsv", () => {
   it("emits header + rows", () => {
     const csv = buildReportCsv(report(["Corrosion"]));
     const lines = csv.trim().split("\n");
-    expect(lines[0]).toBe("id,assetId,assetCategory,severity,title,frameTimestamp,recommendedAction,urgency,voiceNoteExcerpt");
+    expect(lines[0]).toBe("id,assetId,assetCategory,severity,evidenceSource,title,frameTimestamp,observation,recommendedAction,urgency,voiceNoteExcerpt");
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain("Corrosion");
   });
@@ -47,6 +47,22 @@ describe("buildReportCsv", () => {
 
   it("header-only for empty defects", () => {
     expect(buildReportCsv(report([])).trim().split("\n")).toHaveLength(1);
+  });
+
+  it("keeps evidence provenance: visual flag, observation, voice default", () => {
+    const withEvidence = report(["Corrosion"]);
+    withEvidence.defects[0] = {
+      ...withEvidence.defects[0],
+      evidenceSource: "visual",
+      observation: 'Rust at cap, "spreading"',
+    };
+    const visualRow = buildReportCsv(withEvidence).trim().split("\n")[1];
+    expect(visualRow.split(",")[4]).toBe("visual");
+    expect(visualRow).toContain('"Rust at cap, ""spreading"""');
+
+    // Legacy report with no evidenceSource must not imply visual evidence.
+    const legacyRow = buildReportCsv(report(["Corrosion"])).trim().split("\n")[1];
+    expect(legacyRow.split(",")[4]).toBe("voice");
   });
 });
 
