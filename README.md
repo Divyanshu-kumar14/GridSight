@@ -32,7 +32,47 @@ Key behaviors worth knowing:
 
 - **Timestamps are native-rate.** Upload probes the real fps via `ffprobe`; SAM frame indices are converted with it. A hardcoded 30 fps silently doubles every timestamp on 60 fps footage — this bit us once.
 - **The report envelope is server-built.** The model sometimes returns just `{summary, defects}` and drops the envelope. The API validates only the defects and rebuilds inspection/statistics itself.
-- **No hallucinated defects.** With no voice notes and no transcript, the model is instructed to return zero defects rather than invent damage. For a report with teeth, record a voice note first.
+- **No hallucinated defects.** With no voice notes and no transcript, the model is instructed to return zero defects rather than invent damage. Measured: 0 false positives across 20 clean frames (see [Verification pass](#verification-pass)).
+
+## Verification pass
+
+A defect report is a safety artifact, so the pipeline does not trust its own first pass. Every finding marked **VISUAL** is re-checked against a 1024px re-extraction of the exact frame it cited, and the model must answer one question: does this frame concretely show the claimed damage?
+
+It returns `keep`, `downgrade`, or `drop`. The server applies the verdict — the model never edits the report itself.
+
+| Verdict | Effect on the finding |
+|---|---|
+| `keep` | unchanged, badged `VERIFIED` |
+| `downgrade` | visual claims stripped, becomes **VOICE ONLY** |
+| `drop` | removed from the report |
+| `skipped` | verification could not run — finding is **kept**, never deleted |
+
+Voice-only findings are never audited; there is nothing visual to check. A failed or unparseable verification call marks the finding `skipped` and leaves it in the report. Deleting findings because an infrastructure call failed would be the worst available failure mode in a safety product.
+
+### Measured
+
+```
+GridSight eval — 30 frames (20 clean, 10 defective) — model muse-spark-1.3
+┌────────────┬───────────┬────────┬──────┬──────┐
+│ mode       │ precision │ recall │ FP   │ FN   │
+├────────────┼───────────┼────────┼──────┼──────┤
+│ first pass │      1.00 │   1.00 │    0 │    0 │
+│ verified   │      1.00 │   1.00 │    0 │    0 │
+└────────────┴───────────┴────────┴──────┴──────┘
+```
+
+On 30 labeled frames (20 clean): 0 false positives, and the one real defect — rust on a pole — was found in all 10 frames that show it. Verification confirmed all 10 and dropped none.
+
+**Read that honestly.** The 10 defective frames are ten consecutive seconds of the *same* rusted pole, not ten independent defects. The set measures hallucination rate and single-defect recall; it is a smoke test, not a benchmark. There is no false positive here for the verifier to remove, so the table shows the verifier does not *harm* correct findings. The `downgrade` and `drop` paths are covered by unit tests in `src/lib/__tests__/verify.test.ts`.
+
+Reproduce offline with zero API calls:
+
+```bash
+npx tsx scripts/eval.ts          # cached scoring
+npx tsx scripts/eval.ts --live   # re-record fixtures (burns quota)
+```
+
+Ground truth lives in `fixtures/eval/labels.json` and was set by viewing the extracted frames before any model run.
 
 ## Quick start
 
@@ -47,7 +87,7 @@ npm run dev                  # http://localhost:3000
 | Command        | What it does                              |
 |----------------|-------------------------------------------|
 | `npm run dev`  | Dev server (`--port 3000` to pin the port) |
-| `npm test`     | Vitest suite — 75 tests, 10 files          |
+| `npm test`     | Vitest suite — 129 tests, 14 files         |
 | `npx tsc --noEmit` | Typecheck                             |
 | `npm run lint` | Next.js ESLint                           |
 | `npm run build`| Production build (14 routes)              |

@@ -12,7 +12,7 @@
 //   npx tsx scripts/eval.ts --live [--cap=N] [--json=out.json]
 // Without --live, every labeled frame must have fixtures/eval/cache/<id>.json
 // or the run exits non-zero. --live makes real API calls (bounded: at most
-// 2 calls per frame — 1 first-pass + verify cap 1).
+// 4 calls per frame — 1 first pass + verify cap 3).
 // Never run in CI or npm test (burns quota).
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -22,16 +22,25 @@ import { join } from "node:path";
 import { z } from "zod";
 import { getSparkClient } from "../src/lib/meta-client";
 import { getSparkConfig } from "../src/lib/models";
-import { REPORT_SYSTEM_PROMPT, validateDefects } from "../src/lib/report";
+import { validateDefects } from "../src/lib/report";
 import { extractFrame } from "../src/lib/ffmpeg";
 import { ensureScratchDirs } from "../src/lib/store";
 import { verifyDefects } from "../src/lib/verify";
 import type { Defect } from "../src/lib/types";
-import { score, type FrameResult } from "./eval-lib";
+import {
+  EVAL_SYSTEM_PROMPT,
+  parseEvalDefects,
+  score,
+  toDefect,
+  type FrameResult,
+} from "./eval-lib";
 
 const LABELS_PATH = "fixtures/eval/labels.json";
 const CACHE_DIR = "fixtures/eval/cache";
-const VERIFY_CAP_PER_FRAME = 1; // keeps --live total at most 2 calls per frame
+const VERIFY_CAP_PER_FRAME = 3; // one frame may hold several findings; audit up to 3
+// Bump when the first-pass prompt or output contract changes. Cached responses from
+// an older prompt are answers to a different question and must never be reused.
+const EVAL_VERSION = 2;
 
 const labelSchema = z.object({
   sourceClip: z.string().min(1),
@@ -49,6 +58,8 @@ const labelSchema = z.object({
 const cacheSchema = z.object({
   id: z.string().min(1),
   model: z.string().min(1),
+  // Responses recorded under an older prompt are rejected, forcing a re-run.
+  evalVersion: z.number().int(),
   firstPass: z.string(),
   verdictRaw: z.array(z.string()),
   after: z.array(z.unknown()),
@@ -71,21 +82,16 @@ function labelSingleFrame(defects: Defect[], frameBase64: string): Defect[] {
   );
 }
 
-// Same envelope tolerance as the report route: bare array or {defects}.
-function parseDefects(raw: string): Defect[] {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw);
-  const parsed = JSON.parse((fenced ? fenced[1] : raw).trim()) as unknown;
-  return validateDefects(
-    parsed && typeof parsed === "object" && "defects" in (parsed as object)
-      ? parsed
-      : parsed,
-  );
+// Eval first pass → Defect[]. Uses the single-frame eval prompt, not the report
+// prompt: the report prompt needs a tracked assetId and returns [] without one.
+function parseFirstPass(raw: string, frameTimestamp: number, frameId: string): Defect[] {
+  return parseEvalDefects(raw).map((d, i) => toDefect(d, frameTimestamp, `${frameId}-${i + 1}`));
 }
 
 function cacheIsComplete(entry: CacheEntry): boolean {
   try {
     if (entry.error) return false;
-    parseDefects(entry.firstPass);
+    parseEvalDefects(entry.firstPass);
     validateDefects(entry.after);
     return true;
   } catch {
@@ -136,16 +142,26 @@ function border(left: string, mid: string, right: string, widths: number[]): str
   return left + widths.map((w) => "─".repeat(w + 2)).join(mid) + right;
 }
 
+// null precision/recall means the ratio was undefined (no predictions / no truth).
+// Print an em dash — never 0.00, which would read as a measured failure.
+const f2 = (x: number | null): string => (x === null ? "—" : x.toFixed(2));
+
+type Row = {
+  precision: number | null;
+  recall: number | null;
+  falsePositives: number;
+  falseNegatives: number;
+};
+
 function renderTable(args: {
   n: number;
   clean: number;
   defective: number;
   model: string;
-  before: { precision: number; recall: number; falsePositives: number; falseNegatives: number };
-  after: { precision: number; recall: number; falsePositives: number; falseNegatives: number };
+  before: Row;
+  after: Row;
 }): string {
   const W = [10, 9, 6, 4, 4];
-  const f2 = (x: number) => x.toFixed(2);
   const lines = [
     `GridSight eval — ${args.n} frames (${args.clean} clean, ${args.defective} defective) — model ${args.model}`,
     border("┌", "┬", "┐", W),
@@ -165,25 +181,30 @@ function renderTable(args: {
       "│",
     border("└", "┴", "┘", W),
   ];
-  const dp = args.after.precision - args.before.precision;
+  const dp =
+    args.before.precision === null || args.after.precision === null
+      ? null
+      : args.after.precision - args.before.precision;
   const removed = args.before.falsePositives - args.after.falsePositives;
   const fpBit =
     removed > 0 ? `-${removed}` : removed < 0 ? `+${-removed}` : "0";
-  lines.push(`Δ precision ${(dp >= 0 ? "+" : "") + dp.toFixed(2)} · Δ false positives ${fpBit}`);
+  const dpBit = dp === null ? "n/a" : (dp >= 0 ? "+" : "") + dp.toFixed(2);
+  lines.push(`Δ precision ${dpBit} · Δ false positives ${fpBit}`);
   return lines.join("\n");
 }
 
 function renderSentence(args: {
   n: number;
   clean: number;
-  before: { precision: number; recall: number; falsePositives: number };
-  after: { precision: number; recall: number; falsePositives: number };
+  before: Row;
+  after: Row;
 }): string {
-  const f2 = (x: number) => x.toFixed(2);
   const precBit =
-    args.after.precision === args.before.precision
-      ? `left precision unchanged at ${f2(args.after.precision)}`
-      : `raised precision from ${f2(args.before.precision)} to ${f2(args.after.precision)}`;
+    args.before.precision === null || args.after.precision === null
+      ? "has no defined precision (no predictions were made)"
+      : args.after.precision === args.before.precision
+        ? `left precision unchanged at ${f2(args.after.precision)}`
+        : `raised precision from ${f2(args.before.precision)} to ${f2(args.after.precision)}`;
   const y = args.before.falsePositives;
   const x = y - args.after.falsePositives;
   const fpBit =
@@ -197,9 +218,11 @@ function renderSentence(args: {
             ? `with no false positives in either pass`
             : `introduced ${args.after.falsePositives} false positives`;
   const recallBit =
-    args.after.recall === args.before.recall
-      ? `with recall unchanged at ${f2(args.after.recall)}`
-      : `with recall from ${f2(args.before.recall)} to ${f2(args.after.recall)}`;
+    args.before.recall === null || args.after.recall === null
+      ? "with no defined recall (no labeled defects in the set)"
+      : args.after.recall === args.before.recall
+        ? `with recall unchanged at ${f2(args.after.recall)}`
+        : `with recall from ${f2(args.before.recall)} to ${f2(args.after.recall)}`;
   return `On ${args.n} labeled frames (${args.clean} clean): verification ${precBit}, ${fpBit}, ${recallBit}.`;
 }
 
@@ -238,7 +261,7 @@ async function main(): Promise<void> {
     }
     model = cached[0].entry.model;
     for (const { label, entry } of cached) {
-      const before = parseDefects(entry.firstPass);
+      const before = parseFirstPass(entry.firstPass, label.timestamp, label.id);
       const after = validateDefects(entry.after);
       runs.push({ id: label.id, truth: label.truth, reported: after, reportedBeforeVerify: before });
     }
@@ -263,14 +286,17 @@ async function main(): Promise<void> {
         : null;
       if (existing?.success && cacheIsComplete(existing.data) && existing.data.model === model) {
         console.error(`eval ${f.id}: cached, skipping.`);
-        const before = parseDefects(existing.data.firstPass);
+        const before = parseFirstPass(existing.data.firstPass, f.timestamp, f.id);
         const after = validateDefects(existing.data.after);
         runs.push({ id: f.id, truth: f.truth, reported: after, reportedBeforeVerify: before });
         continue;
       }
       console.error(`eval ${f.id} @t=${f.timestamp}s…`);
       const writeCache = (entry: Record<string, unknown>) =>
-        writeFileSync(cachePath, JSON.stringify({ id: f.id, model, ...entry }, null, 2));
+        writeFileSync(
+          cachePath,
+          JSON.stringify({ id: f.id, model, evalVersion: EVAL_VERSION, ...entry }, null, 2),
+        );
       try {
         const tmp = join(tmpdir(), `gridsight-eval-${f.id}.jpg`);
         await extractFrame(clipPath, f.timestamp, tmp);
@@ -282,24 +308,14 @@ async function main(): Promise<void> {
           temperature: 0.2,
           response_format: { type: "json_object" },
           messages: [
-            { role: "system", content: REPORT_SYSTEM_PROMPT },
+            { role: "system", content: EVAL_SYSTEM_PROMPT },
             {
               role: "user",
               content: [
                 {
                   type: "text",
-                  text: JSON.stringify({
-                    frames_attached: 1,
-                    frame_note:
-                      "The attached key frame FRAME 0 is the visual ground truth. Cite visual claims with evidenceFrameIndex.",
-                    tracked_assets: [],
-                    tagged_notes: [],
-                    voice_transcript: [],
-                    key_frame_timestamps: [f.timestamp],
-                    inspection_metadata: { substation: "eval", date: new Date().toISOString(), inspector: "eval" },
-                  }),
+                  text: `Substation inspection frame at t=${f.timestamp.toFixed(2)}s. List every visible defect.`,
                 },
-                { type: "text", text: `FRAME 0 @ t=${f.timestamp.toFixed(2)}s` },
                 { type: "image_url", image_url: { url: `data:image/jpeg;base64,${b64}` } },
               ],
             },
@@ -309,7 +325,7 @@ async function main(): Promise<void> {
         // Cache the raw response BEFORE parsing: a malformed model output must
         // survive for audit even though it fails this frame.
         writeCache({ firstPass, verdictRaw: [], after: [], error: "pending" });
-        const before = parseDefects(firstPass);
+        const before = parseFirstPass(firstPass, f.timestamp, f.id);
         const labeled = labelSingleFrame(before, b64);
         const verdictRaw: string[] = [];
         const after = await verifyDefects(labeled, {
@@ -343,7 +359,10 @@ async function main(): Promise<void> {
           try {
             const entry = JSON.parse(partial) as Record<string, unknown>;
             entry.error = msg.slice(0, 300);
-            writeFileSync(cachePath, JSON.stringify({ id: f.id, model, ...entry }, null, 2));
+            writeFileSync(
+              cachePath,
+              JSON.stringify({ id: f.id, model, evalVersion: EVAL_VERSION, ...entry }, null, 2),
+            );
           } catch {
             // leave the partial raw as-is; completeness check will reject it
           }

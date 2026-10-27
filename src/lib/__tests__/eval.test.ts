@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { matchDefect, score, type FrameResult } from "../../../scripts/eval-lib";
+import {
+  matchDefect,
+  parseEvalDefects,
+  score,
+  toDefect,
+  type FrameResult,
+} from "../../../scripts/eval-lib";
 import type { Defect } from "../types";
 
 const defect = (id: string, category: string): Defect => ({
@@ -22,20 +28,20 @@ const run = (
 ): FrameResult => ({ id, truth, reported: after, reportedBeforeVerify: before });
 
 describe("score", () => {
-  it("returns zeros, never NaN, on empty input", () => {
+  it("returns undefined ratios as null, never NaN or a fake zero, on empty input", () => {
     expect(score([], "before")).toEqual({
       truePositives: 0,
       falsePositives: 0,
       falseNegatives: 0,
-      precision: 0,
-      recall: 0,
+      precision: null,
+      recall: null,
     });
     expect(score([], "after")).toEqual({
       truePositives: 0,
       falsePositives: 0,
       falseNegatives: 0,
-      precision: 0,
-      recall: 0,
+      precision: null,
+      recall: null,
     });
   });
 
@@ -60,7 +66,7 @@ describe("score", () => {
     expect(m.falsePositives).toBe(2);
     expect(m.falseNegatives).toBe(0);
     expect(m.precision).toBe(0);
-    expect(m.recall).toBe(0); // nothing to find → 0, not NaN
+    expect(m.recall).toBeNull(); // nothing to find → undefined, not 0
   });
 
   it("does not double-count duplicate truth entries", () => {
@@ -109,5 +115,58 @@ describe("matchDefect", () => {
     expect(matchDefect(defect("d", ""), [{ category: "pole", defect: "rust" }])).toBe(false);
     expect(matchDefect(defect("d", "pole"), [{ category: "", defect: "rust" }])).toBe(false);
     expect(matchDefect(defect("d", "pole"), [])).toBe(false);
+  });
+});
+
+describe("parseEvalDefects", () => {
+  const one = [{ category: "pole", defect: "rust", severity: "HIGH", observation: "Rust streaks run down the pole." }];
+
+  it("reads the documented envelope", () => {
+    expect(parseEvalDefects(JSON.stringify({ defects: one }))).toEqual(one);
+  });
+
+  it("reads a bare array", () => {
+    expect(parseEvalDefects(JSON.stringify(one))).toEqual(one);
+  });
+
+  it("reads fenced JSON", () => {
+    expect(parseEvalDefects("```json\n" + JSON.stringify({ defects: one }) + "\n```")).toEqual(one);
+  });
+
+  it("reads JSON wrapped in prose", () => {
+    expect(parseEvalDefects(`Sure. ${JSON.stringify({ defects: one })} Done.`)).toEqual(one);
+  });
+
+  it("returns an empty array for a clean frame", () => {
+    expect(parseEvalDefects('{"defects":[]}')).toEqual([]);
+  });
+
+  it("throws on unparseable or off-schema output", () => {
+    expect(() => parseEvalDefects("not json at all")).toThrow();
+    expect(() => parseEvalDefects('{"defects":[{"category":"pole"}]}')).toThrow();
+    expect(() => parseEvalDefects('{"defects":[{"category":"pole","defect":"rust","severity":"SEVERE","observation":"x"}]}')).toThrow();
+  });
+});
+
+describe("toDefect", () => {
+  const raw = { category: "Steel Pole", defect: "rust", severity: "CRITICAL" as const, observation: "Rust on the shaft." };
+
+  it("maps to a Defect the scorer can match", () => {
+    const d = toDefect(raw, 12.5, "f021-1");
+    expect(d.assetCategory).toBe("Steel Pole");
+    expect(d.assetId).toBe("steel-pole-001");
+    expect(d.frameTimestamp).toBe(12.5);
+    expect(d.severity).toBe("CRITICAL");
+    expect(d.estimatedUrgency).toBe("Immediate");
+    expect(matchDefect(d, [{ category: "pole", defect: "rust" }])).toBe(true);
+  });
+
+  it("cites frame 0 so verification can audit it", () => {
+    expect(toDefect(raw, 0, "x").evidenceFrameIndex).toBe(0);
+    expect(toDefect(raw, 0, "x").observation).toBe("Rust on the shaft.");
+  });
+
+  it("falls back to a safe slug for unusable categories", () => {
+    expect(toDefect({ ...raw, category: "!!!" }, 0, "x").assetId).toBe("asset-001");
   });
 });
