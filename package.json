@@ -11,7 +11,8 @@
     "eval": "tsx scripts/eval.ts",
     "eval:smoke": "tsx scripts/eval-smoke.ts",
     "bench": "tsx scripts/bench.ts",
-    "bench:real": "tsx scripts/bench.ts --dataset=real-v1"
+    "bench:real": "tsx scripts/bench.ts --dataset=real-v1",
+    "bench:real:scored": "tsx scripts/bench.ts --dataset=real-v1 --scoring=static --predictions=fixtures/benchmark/real-v1/predictions-cached-v1.json"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

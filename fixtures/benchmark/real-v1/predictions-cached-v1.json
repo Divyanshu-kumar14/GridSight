@@ -1,0 +1,74 @@
+{
+  "status": "completed",
+  "datasetVersion": "real-v1",
+  "model": "muse-spark-1.3 via meta",
+  "recordedAt": "2026-10-28T00:00:00.000Z",
+  "provenanceDefault": "cached",
+  "inputs": {
+    "f001": "d346cd973c4c79657e490e4b8602a79a6f976ca1dfaa59d5478e0e49e44c780c",
+    "f003": "f9e13db2dda6929c7226c0f0b5e2e57e9e76ffca14457cdb7e7238aab071c4f6",
+    "f006": "5acf81fec9fd8e3ac96f2efc54bcc4f0708e6aebf2f6a6be29b6d95415ff40a2",
+    "f009": "f36706e23257db54a16621658f8dc333b65845a37ef93be420568a7dd7ae194a",
+    "f011": "43c73ba5e11da1bf4d74a653d252715e31aa993b76acac9e537e0a652a66f99b",
+    "f014": "766d2c57a153f4613b88dbb1af0eb2cc40f15515019fc92b49ae6922f8751eac",
+    "f018": "327dcab6a12bc26f335c2ae3001f7cd6075d469bdc00ebdab8951a689e070aab",
+    "f021": "2cfff686fc1ee6a372b92e36dee959dfbaf88f9d21d5f6247d28363b978bf074",
+    "f023": "9fa55398a75473b6022faf3b3ff2c3c4d5d75fbc3cd5513bd74e275855bbd4ab",
+    "f025": "256efaa27a306e0ce0c196d238636b2bad4d192622222b9588ef5b11c1a96949",
+    "f028": "9ec9678896ff6242e85e56dea9cf5097b400258f64a7b31e4563c6e1f01c73ae",
+    "f030": "b3b333f93d03fd51bf7a19d182af2b9e93a17bf4cc0a176207ed77917b2d4f00"
+  },
+  "predictions": [
+    {
+      "frameId": "f021",
+      "category": "pole",
+      "defectClass": "rust",
+      "bbox": null,
+      "evidenceSource": "visual",
+      "verification": "keep",
+      "provenance": "cached"
+    },
+    {
+      "frameId": "f023",
+      "category": "pole",
+      "defectClass": "rust",
+      "bbox": null,
+      "evidenceSource": "visual",
+      "verification": "keep",
+      "provenance": "cached"
+    },
+    {
+      "frameId": "f025",
+      "category": "pole",
+      "defectClass": "rust",
+      "bbox": null,
+      "evidenceSource": "visual",
+      "verification": "keep",
+      "provenance": "cached"
+    },
+    {
+      "frameId": "f028",
+      "category": "pole",
+      "defectClass": "rust",
+      "bbox": null,
+      "evidenceSource": "visual",
+      "verification": "keep",
+      "provenance": "cached"
+    },
+    {
+      "frameId": "f030",
+      "category": "pole",
+      "defectClass": "rust",
+      "bbox": null,
+      "evidenceSource": "visual",
+      "verification": "keep",
+      "provenance": "cached"
+    }
+  ],
+  "notes": [
+    "Recorded cached run over the 12 real-v1 input frames (fixtures/eval/cache/f001,f003,f006,f009,f011,f014,f018,f021,f023,f025,f028,f030 — muse-spark-1.3, evalVersion 2).",
+    "Clean frames (f001,f003,f006,f009,f011,f014,f018) contributed zero predictions — evaluated as clean, never as unevaluated.",
+    "Provenance is cached (recorded model outputs), not actual live inference with a run manifest. Scores detection on frame + category + visual evidence; boxes never gate detection on the static path (see PREDICTIONS.md).",
+    "Reproduce: npx tsx scripts/eval-to-predictions.ts --format=static --cache-dir=<12-frame dir> --provenance=cached --model='muse-spark-1.3 via meta' --json=/tmp/artifact.json, then score with --scoring=static."
+  ]
+}

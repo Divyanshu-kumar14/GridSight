@@ -10,7 +10,7 @@
     "totalDefectsFound": 2,
     "coveragePercent": 83
   },
-  "summary": "Two issues need attention at East Bus Substation: corrosion on the third east-bus insulator requires prompt repair, and transformer T4 shows low oil to check at the next visit. Remaining tracked assets show no reported defects.",
+  "summary": "Two issues at East Bus Substation: corrosion on east-bus insulator #3 is VISUAL — cited frame verified at 1024px re-extraction with a tracked SAM bbox — and transformer T4 oil level is VOICE ONLY, downgraded after the verification pass found no concrete visual confirmation. Remaining tracked assets show no reported defects.",
   "defects": [
     {
       "id": "def-001",
@@ -18,12 +18,20 @@
       "assetCategory": "insulator",
       "severity": "CRITICAL",
       "title": "Corrosion on east bus insulator #3",
-      "description": "Inspector reports visible corrosion near the cap of the third insulator on the east bus. No key frame in this sample confirms it visually — treat as unverified voice report.",
+      "description": "Reddish corrosion near the cap of the third insulator on the east bus, concretely visible in the cited key frame.",
       "frameTimestamp": 15,
       "voiceNoteExcerpt": "The third insulator on the east bus has visible corrosion near the cap",
       "recommendedAction": "Schedule replacement of insulator-003 within 30 days; treat as arc-flash risk until remediated.",
       "estimatedUrgency": "Immediate",
-      "evidenceSource": "voice"
+      "evidenceFrameIndex": 0,
+      "observation": "Reddish corrosion is concretely visible near the cap of the third insulator on the east bus in the cited frame.",
+      "evidenceSource": "visual",
+      "overlayBox": { "x": 0.45, "y": 0.31, "w": 0.08, "h": 0.12 },
+      "assetAssociation": "confirmed",
+      "verification": {
+        "verdict": "keep",
+        "reason": "Cited frame concretely shows reddish corrosion near the cap of insulator-003; 1024px re-extraction confirms the claimed damage."
+      }
     },
     {
       "id": "def-002",
@@ -31,12 +39,18 @@
       "assetCategory": "transformer",
       "severity": "MEDIUM",
       "title": "Low oil level on transformer T4",
-      "description": "Inspector reports low oil level on transformer T4; no visual leak confirmed in tracked frames.",
+      "description": "Inspector reports low oil level on transformer T4; verification pass found no concrete visual confirmation in the cited frame, so the finding is preserved as a voice-only note.",
       "frameTimestamp": 22,
       "voiceNoteExcerpt": "Transformer T4 oil level looks low, marking for follow-up next visit",
       "recommendedAction": "Verify oil level with gauge at next scheduled maintenance; top up if below threshold.",
       "estimatedUrgency": "Next scheduled",
-      "evidenceSource": "voice"
+      "evidenceSource": "voice",
+      "overlayBox": { "x": 0.56, "y": 0.41, "w": 0.2, "h": 0.25 },
+      "assetAssociation": "confirmed",
+      "verification": {
+        "verdict": "downgrade",
+        "reason": "Oil level not concretely visible in the cited frame — plausible from the inspector note but unverified; visual claims stripped, finding kept as voice-only."
+      }
     }
   ],
   "statistics": {
@@ -44,7 +58,16 @@
     "high": 0,
     "medium": 1,
     "low": 0,
-    "byCategory": { "insulator": 1, "transformer": 1 }
+    "byCategory": { "insulator": 1, "transformer": 1 },
+    "verification": { "kept": 1, "downgraded": 1, "dropped": 0, "skipped": 0 }
   },
+  "evidenceCoverage": {
+    "totalAssetsTracked": 6,
+    "assetsRepresented": 2,
+    "visualFindings": 1,
+    "voiceOnlyFindings": 1,
+    "verificationSkipped": 0
+  },
+  "modelRun": { "provider": "meta", "model": "muse-spark-1.3" },
   "generatedAt": "2026-10-27T00:00:00.000Z"
 }

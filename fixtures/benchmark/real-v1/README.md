@@ -13,10 +13,18 @@ temporal selection, and note alignment are NOT APPLICABLE and report null.
   `--predictions=<artifact.json>` scores a completed run artifact
   (`{status:"completed", predictions:[...]}`); without it the benchmark is
   NOT EVALUATED (exit 2), never a failure and never a pass.
+- Scored example (committed): `predictions-cached-v1.json` — 12 recorded
+  `muse-spark-1.3` outputs (`provenance: cached`), scored with the static
+  frame-linked matcher. Run it with a single command:
+  `npm run bench:real:scored` (expects PASS, P=1.00 R=1.00 on EP-RUST-POLE-01).
+  `provenance: actual` would require a run manifest with per-frame
+  provider-request evidence — this artifact honestly stays `cached`.
 - Exit codes: 0 scored-pass · 1 scored-fail · 2 not-evaluated (no predictions) ·
   3 input error (bad ground truth, malformed/stale/missing-explicit artifact).
-- No predictions ship with this dataset: visual accuracy reports UNAVAILABLE
-  until matching actual pipeline predictions are recorded. Hand-authored
+- No predictions ship with this dataset by default: visual accuracy reports UNAVAILABLE
+  until matching pipeline predictions are recorded. The committed
+  `predictions-cached-v1.json` is the one scored exception (recorded outputs,
+  `cached` provenance — never presented as live `actual` inference). Hand-authored
   prediction fixtures in unit tests validate the scorer only.
 
 Do not present cached `fixtures/eval/cache` outputs as predictions for these

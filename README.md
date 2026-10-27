@@ -10,9 +10,11 @@ Drone footage of a substation goes in; a severity-ranked defect list comes out �
 
 One substation pass produces thousands of frames. No inspector watches all of it at 1× and catches everything. GridSight is for the substation inspector who flies the yard, dictates notes on the drive back, and needs a ranked defect list before the next shift.
 
+**Before:** 45 minutes of 60fps drone video = 162,000 frames to review, plus an estimated ~3 hours of manual video scrubbing and spreadsheet logging back at the office. **After:** a roughly 15-minute automated pass during the drive back → verified, frame-cited CSV defect list ready before the truck parks. *(Frame count is exact arithmetic; the time figures are planning estimates, not measured results.)*
+
 Upload a clip → track every asset with SAM 3.1 video segmentation → transcribe voice notes → pin each note to the asset visible at that moment → generate a report where Spark writes the defects and the server rebuilds the envelope. A second verification pass re-checks every visual finding against a fresh extraction of the exact frame it cited, and the model must answer one question: does this frame concretely show the claimed damage?
 
-No key? `USE_CACHED=true` serves frozen fixtures for the full loop with zero API burn — an offline fallback, not live data.
+No key? `USE_CACHED=true` serves frozen fixtures for the full loop with zero API burn — an offline fallback, not live data. The cached demo showcases both paths: one **VISUAL** verified finding (frame citation + tracked SAM bbox + `keep` verdict) and one **VOICE ONLY** downgraded finding.
 
 ## Try it in 60 seconds
 
@@ -32,7 +34,7 @@ Open the app, upload any MP4, and run the full loop: Upload → Track → Transc
 - **Notes pinned to assets, not timestamps** — each voice note links to the tracked object visible when it was spoken.
 - **Reports that cite evidence** — every defect carries a frame citation and a verification verdict (`keep` / `downgrade` / `drop` / `skipped`); the server rebuilds inspection statistics itself instead of trusting model JSON.
 - **Zero-hallucination default** — with no voice notes and no transcript, the model is instructed to return zero defects rather than invent damage.
-- **Honest benchmarks** — a real-image static benchmark that reports NOT EVALUATED instead of a fake score when no predictions exist (see [Evaluation](#evaluation)).
+- **Honest benchmarks** — a real-image static benchmark that reports NOT EVALUATED instead of a fake score when no predictions are supplied, plus a committed cached run that scores (see [Evaluation](#evaluation)).
 
 ## Key innovations
 
@@ -98,10 +100,13 @@ Read honestly: the 10 defective frames are adjacent seconds of the *same* rusted
 
 ```bash
 npm run bench        # synthetic pipeline-logic cases: 8 passed, 0 failed
-npm run bench:real   # real-v1: exits 2, every case NOT EVALUATED — no artifact ships
+npm run bench:real   # real-v1: exits 2, every case NOT EVALUATED — no artifact supplied
+npm run bench:real:scored  # real-v1 + committed cached predictions: PASS, P=1.00 R=1.00
 ```
 
-No predictions ship with the dataset, so visual accuracy reports UNAVAILABLE until matching pipeline predictions are recorded (`--predictions=<artifact.json>`). Exit codes are contractual: 0 pass · 1 fail · 2 not-evaluated · 3 input error. An incomplete or manifest-less run exits 2 — never a silent pass, never a fabricated zero.
+The scored run uses `fixtures/benchmark/real-v1/predictions-cached-v1.json` — 12 recorded `muse-spark-1.3` outputs (`provenance: cached`, 5 visual rust keeps on f021/f023/f025/f028/f030, 7 clean no-findings) scored with the static frame-linked matcher. Detection matches on frame + category + visual evidence only; boxes never gate detection on this path. `provenance: actual` would require a run manifest with per-frame provider-request evidence (see `PREDICTIONS.md`) — this artifact honestly stays `cached`, never `actual`.
+
+No predictions ship with the dataset by default, so visual accuracy reports UNAVAILABLE until matching pipeline predictions are recorded (`--predictions=<artifact.json>`). Exit codes are contractual: 0 pass · 1 fail · 2 not-evaluated · 3 input error. An incomplete or manifest-less run exits 2 — never a silent pass, never a fabricated zero.
 
 ## What is real vs. simulated
 
@@ -109,8 +114,8 @@ No predictions ship with the dataset, so visual accuracy reports UNAVAILABLE unt
 |---|---|---|
 | Upload, track, transcribe, tag, report, CSV export | Working | `src/app/api/*`, exercised live and in tests |
 | SAM tracking on full-resolution footage | Working | 594-frame tower track in a recorded session |
-| Cached demo mode (`USE_CACHED=true`) | Simulated | `src/lib/demo-fixture.ts` — frozen fixtures, zero burn, voice-only sample findings |
-| Benchmark detection scores | Not measured here | `bench:real` reports NOT EVALUATED without a prediction artifact |
+| Cached demo mode (`USE_CACHED=true`) | Frozen sample | `src/lib/demo-fixture.ts` — frozen fixtures, zero burn; showcases one VISUAL verified finding + one VOICE ONLY downgraded finding |
+| Benchmark detection scores | Measured on recorded outputs | `bench:real:scored` reports P=1.00 R=1.00 on the rust episode (12-frame cached run); `bench:real` without predictions stays NOT EVALUATED |
 | Synthetic benchmark (`bench`) | Working, limited | 8 pipeline-logic cases — evidence handling only, no images |
 | PDF export | Planned | CSV ships; PDF deferred |
 
@@ -224,7 +229,7 @@ docker run -p 3000:3000 -e MODEL_API_KEY="$MODEL_API_KEY" gridsight
 ## Known limits
 
 - Single-user, single-node: SQLite + local scratch dir, no auth.
-- The cached demo (`USE_CACHED=true`) is a voice-only sample, so both findings show `VOICE ONLY`. The `VISUAL` path needs real footage — run it once live before recording.
+- The cached demo (`USE_CACHED=true`) is a frozen two-finding sample: one `VISUAL` verified finding (frame citation + tracked bbox + `keep`) and one `VOICE ONLY` downgraded finding. The `VISUAL` path on live footage needs a real run — freeze it with `scripts/cache-demo.ts` before recording.
 - Key frames are downscaled to 1280px (q≈4, ~40–150KB) before they are sent to Spark; full-resolution frames would blow the vision request budget.
 - Transcription needs staged audio (record in-browser or attach a file); visual findings still work without it, but note-only findings require a transcript.
 - Thumbnail/key-frame extraction needs `ffmpeg`; failures skip loudly per-asset without failing the batch.
