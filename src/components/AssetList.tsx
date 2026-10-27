@@ -26,8 +26,14 @@ export default function AssetList({
   if (objects.length === 0) {
     return (
       <div className="panel p-4">
-        <span className="micro-label">Assets</span>
-        <p className="mt-1 text-sm text-slate-500">No tracked objects yet — click “Start Tracking”.</p>
+        <div className="relative overflow-hidden rounded-md border border-dashed border-amber-500/60 p-6 text-center">
+          <div
+            className="pointer-events-none absolute left-0 h-8 w-full border-y border-amber-500/25 bg-amber-500/10"
+            style={{ top: 0, animation: "gs-scan 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite" }}
+            aria-hidden
+          />
+          <p className="relative text-sm text-slate-300">Start tracking to detect assets.</p>
+        </div>
       </div>
     );
   }
@@ -48,21 +54,27 @@ export default function AssetList({
           ))}
         </select>
       </div>
-      <ul className="max-h-64 space-y-1 overflow-y-auto">
+      <ul className="grid max-h-80 grid-cols-2 gap-2 overflow-y-auto">
         {visible.map((o) => (
           <li key={o.id}>
             <button
               onClick={() => onSelect(o.id)}
-              className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-slate-800 ${selectedId === o.id ? "bg-slate-800" : ""}`}
+              className={`h-full w-full rounded-md border border-line bg-ink p-2 text-left text-xs transition-colors hover:border-slate-500 ${selectedId === o.id ? "border-amber-500" : ""}`}
             >
-              <span className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: o.color }} />
               {thumbs?.[o.id] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={thumbs[o.id]} alt="" className="h-8 w-10 shrink-0 rounded object-cover" loading="lazy" />
-              ) : null}
-              <span className="font-mono text-slate-200">{o.id}</span>
-              <span className="text-slate-400">{o.category}</span>
-              <span className="ml-auto font-mono text-slate-500">{o.totalFrameCount}f</span>
+                <img src={thumbs[o.id]} alt="" className="mb-2 aspect-video w-full rounded object-cover" loading="lazy" />
+              ) : (
+                <span className="mb-2 block aspect-video w-full rounded bg-slate-900" aria-hidden />
+              )}
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: o.color }} />
+                <span className="truncate font-mono text-slate-200">{o.id}</span>
+              </span>
+              <span className="mt-1 flex items-center justify-between text-slate-400">
+                <span className="truncate">{o.category}</span>
+                <span className="ml-2 shrink-0 font-mono text-slate-500">{o.totalFrameCount}f</span>
+              </span>
             </button>
           </li>
         ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowDown, Check, Mic, Minus } from "lucide-react";
 import type { Defect } from "@/lib/types";
 
 // Contract: one severity-ranked defect with visuals, actions, and seek link.
@@ -62,6 +63,15 @@ const verifyLabel: Record<string, string> = {
   drop: "DROPPED",
 };
 
+const VerifyIcon = ({ verdict }: { verdict: string }) =>
+  verdict === "keep" ? (
+    <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+  ) : verdict === "downgrade" ? (
+    <ArrowDown className="h-3 w-3" strokeWidth={3} aria-hidden />
+  ) : (
+    <Minus className="h-3 w-3" strokeWidth={3} aria-hidden />
+  );
+
 export default function DefectCard({
   defect,
   onSeek,
@@ -71,87 +81,98 @@ export default function DefectCard({
 }) {
   const box = isRenderableBox(defect.overlayBox) ? defect.overlayBox : null;
   return (
-    <article className="panel p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded px-2 py-0.5 font-mono text-xs font-bold text-slate-950 ${badge[defect.severity]}`}>
-          {defect.severity}
-        </span>
-        <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${evidenceBadge(defect)}`}>
-          {defect.evidenceSource === "visual" ? "VISUAL" : "VOICE ONLY"}
-        </span>
-        {defect.assetAssociation && (
-          <span
-            title={
-              defect.assetAssociation === "unresolved"
-                ? "Asset association could not be confirmed — no bounding box borrowed from another asset."
-                : "Asset association confirmed against tracked IDs."
-            }
-            className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${associationBadge(defect)}`}
-          >
-            {defect.assetAssociation === "unresolved" ? "ASSET UNCONFIRMED" : "ASSET CONFIRMED"}
-          </span>
+    <article className="panel grid overflow-hidden sm:grid-cols-3">
+      {/* Left third: evidence frame, or voice-only marker */}
+      <div className="relative bg-black">
+        {defect.frameCapture ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={toDataUrl(defect.frameCapture)}
+              alt={`Key frame for ${defect.title}`}
+              className="h-full min-h-40 w-full object-contain"
+            />
+            {box && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute rounded-sm border-2 border-red-500"
+                style={{
+                  left: `${box.x * 100}%`,
+                  top: `${box.y * 100}%`,
+                  width: `${box.w * 100}%`,
+                  height: `${box.h * 100}%`,
+                }}
+              >
+                <span className="absolute -top-5 left-0 whitespace-nowrap font-mono text-[10px] font-bold text-red-400">
+                  {defect.assetId} @ {fmtClock(defect.frameTimestamp)}
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 p-4 text-center">
+            <Mic className="h-8 w-8 text-amber-500" strokeWidth={1.75} aria-hidden />
+            <span className="font-mono text-[10px] font-bold tracking-wider text-amber-400">VOICE ONLY</span>
+            <span className="text-[11px] text-slate-500">No frame capture — inspector note only.</span>
+          </div>
         )}
-        <h3 className="text-sm font-bold tracking-tight text-slate-100">{defect.title}</h3>
-        <span className="ml-auto font-mono text-xs text-slate-500">
-          {defect.assetId} · {defect.assetCategory}
-        </span>
       </div>
-      {defect.observation && (
-        <p className="mt-2 text-xs text-green-300/90">
-          Observed: {defect.observation}{" "}
-          {typeof defect.evidenceFrameIndex === "number" && (
-            <span className="font-mono text-slate-500">[frame {defect.evidenceFrameIndex}]</span>
-          )}
-        </p>
-      )}
-      {defect.verification && (
-        <p className="mt-2" title={defect.verification.reason}>
-          <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${verifyBadge[defect.verification.verdict] ?? verifyBadge.skipped}`}>
-            {verifyLabel[defect.verification.verdict] ?? defect.verification.verdict.toUpperCase()}
-          </span>{" "}
-          <span className="font-mono text-[11px] text-slate-500">{defect.verification.reason}</span>
-        </p>
-      )}
-      {defect.frameCapture ? (
-        <div className="relative mt-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={toDataUrl(defect.frameCapture)}
-            alt={`Key frame for ${defect.title}`}
-            className="aspect-video max-h-64 w-full rounded-md border border-line object-contain bg-black"
-          />
-          {box && (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute rounded-sm border-2 border-red-500"
-              style={{
-                left: `${box.x * 100}%`,
-                top: `${box.y * 100}%`,
-                width: `${box.w * 100}%`,
-                height: `${box.h * 100}%`,
-              }}
+      {/* Right two thirds: finding */}
+      <div className="p-4 sm:col-span-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`rounded px-2.5 py-1 font-mono text-sm font-bold text-slate-950 ${badge[defect.severity]}`}>
+            {defect.severity}
+          </span>
+          <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${evidenceBadge(defect)}`}>
+            {defect.evidenceSource === "visual"
+              ? `VISUAL${typeof defect.evidenceFrameIndex === "number" ? ` · F${defect.evidenceFrameIndex}` : ""}`
+              : "VOICE ONLY"}
+          </span>
+          {defect.verification && (
+            <span
+              title={defect.verification.reason}
+              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${verifyBadge[defect.verification.verdict] ?? verifyBadge.skipped}`}
             >
-              <span className="absolute -top-5 left-0 whitespace-nowrap font-mono text-[10px] font-bold text-red-400">
-                {defect.assetId} @ {fmtClock(defect.frameTimestamp)}
-              </span>
-            </div>
+              <VerifyIcon verdict={defect.verification.verdict} />
+              {verifyLabel[defect.verification.verdict] ?? defect.verification.verdict.toUpperCase()}
+            </span>
+          )}
+          {defect.assetAssociation && (
+            <span
+              title={
+                defect.assetAssociation === "unresolved"
+                  ? "Asset association could not be confirmed — no bounding box borrowed from another asset."
+                  : "Asset association confirmed against tracked IDs."
+              }
+              className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${associationBadge(defect)}`}
+            >
+              {defect.assetAssociation === "unresolved" ? "ASSET UNCONFIRMED" : "ASSET CONFIRMED"}
+            </span>
           )}
         </div>
-      ) : (
-        <p className="mt-3 rounded-md border border-dashed border-line p-3 text-xs text-slate-500">No frame capture available.</p>
-      )}
-      <p className="mt-3 text-sm text-slate-300">{defect.description}</p>
-      {defect.voiceNoteExcerpt && (
-        <blockquote className="mt-2 border-l border-amber-500/60 pl-2 text-xs italic text-slate-400">
-          “{defect.voiceNoteExcerpt}”
-        </blockquote>
-      )}
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-slate-400">Action: <span className="text-slate-200">{defect.recommendedAction}</span></span>
-        <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-300">{defect.estimatedUrgency}</span>
-        <button onClick={() => onSeek(defect.frameTimestamp)} className="ml-auto font-mono text-amber-400 hover:underline">
-          [view @ {fmtClock(defect.frameTimestamp)}]
-        </button>
+        <h3 className="mt-2 text-base font-bold tracking-tight text-slate-100">{defect.title}</h3>
+        <p className="mt-0.5 font-mono text-xs text-slate-500">
+          {defect.assetId} · {defect.assetCategory}
+        </p>
+        {defect.observation && (
+          <p className="mt-2 text-xs text-green-300/90">Observed: {defect.observation}</p>
+        )}
+        {defect.verification && (
+          <p className="mt-1 font-mono text-[11px] text-slate-500">{defect.verification.reason}</p>
+        )}
+        <p className="mt-2 text-sm text-slate-300">{defect.description}</p>
+        {defect.voiceNoteExcerpt && (
+          <blockquote className="mt-2 border-l border-amber-500/60 pl-2 text-xs italic text-slate-400">
+            “{defect.voiceNoteExcerpt}”
+          </blockquote>
+        )}
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-400">Action: <span className="text-slate-200">{defect.recommendedAction}</span></span>
+          <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-300">{defect.estimatedUrgency}</span>
+          <button onClick={() => onSeek(defect.frameTimestamp)} className="ml-auto font-mono text-amber-400 hover:underline">
+            [view @ {fmtClock(defect.frameTimestamp)}]
+          </button>
+        </div>
       </div>
     </article>
   );

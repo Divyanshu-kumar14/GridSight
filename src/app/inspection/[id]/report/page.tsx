@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Zap } from "lucide-react";
 import DefectCard from "@/components/DefectCard";
 import RawJsonPanel from "@/components/RawJsonPanel";
 import ReportBreadcrumb from "@/components/ReportBreadcrumb";
@@ -9,9 +10,8 @@ import SeverityChart from "@/components/SeverityChart";
 import { buildReportCsv, reportCsvFilename } from "@/lib/export";
 import type { DefectReport } from "@/lib/types";
 
-// /inspection/[id]/report — styled defect report (PRD §9).
-// Data: GET /api/generate-report?sessionId=. CSV export client-side.
-// PDF export deferred (support feature, time-boxed) — noted in UI, not silently missing.
+// Styled defect report. Data: GET /api/generate-report?sessionId=
+// CSV export is client-side.
 export default function ReportPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -55,8 +55,22 @@ export default function ReportPage() {
 
   if (!report) {
     return (
-      <main className="min-h-screen bg-ink px-4 py-12 text-slate-100">
-        <div className="mx-auto max-w-3xl text-sm text-slate-400">Loading report…</div>
+      <main className="min-h-screen bg-ink px-4 py-6 text-slate-100" role="status" aria-label="Loading report">
+        <div className="mx-auto max-w-3xl space-y-4">
+          <div className="panel flex items-center justify-between p-4">
+            <div className="h-5 w-40 animate-pulse rounded bg-slate-800" />
+            <div className="h-5 w-32 animate-pulse rounded bg-amber-900/60" />
+          </div>
+          <div className="h-8 w-2/3 animate-pulse rounded bg-slate-800" />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="panel h-20 animate-pulse bg-slate-900/60" />
+            ))}
+          </div>
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="panel h-36 animate-pulse bg-slate-900/60" />
+          ))}
+        </div>
       </main>
     );
   }
@@ -66,11 +80,36 @@ export default function ReportPage() {
       <div className="mx-auto max-w-3xl space-y-4">
         <ReportBreadcrumb sessionId={sessionId} substationName={report.inspection.substationName} current="REPORT" />
         <header className="panel p-4">
-          <span className="micro-label">GridSight defect report</span>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">{report.inspection.substationName}</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Zap className="h-6 w-6 text-amber-500" strokeWidth={2.5} aria-hidden />
+              <div>
+                <p className="text-base font-bold tracking-tight">GridSight</p>
+                <p className="micro-label">Field Inspection Report</p>
+              </div>
+            </div>
+            <div className="text-right font-mono text-xs text-slate-400">
+              <p>{report.inspection.date}</p>
+              <p className="mt-0.5">{report.inspection.inspector}</p>
+            </div>
+          </div>
+          <h1 className="mt-4 text-2xl font-bold tracking-tight">{report.inspection.substationName}</h1>
           <p className="mt-1 font-mono text-xs text-slate-400">
-            {report.inspection.date} · {report.inspection.inspector} · {report.inspection.totalAssetsTracked} assets tracked · {report.inspection.coveragePercent}% coverage
+            {report.inspection.coveragePercent}% coverage
           </p>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              { label: "ASSETS TRACKED", value: report.inspection.totalAssetsTracked },
+              { label: "CRITICAL", value: report.statistics.critical },
+              { label: "HIGH", value: report.statistics.high },
+              { label: "TOTAL DEFECTS", value: report.defects.length },
+            ].map((s) => (
+              <div key={s.label} className="rounded-md border border-line bg-ink px-3 py-3">
+                <p className="micro-label">{s.label}</p>
+                <p className="tabular mt-1 font-mono text-2xl font-bold text-slate-100">{s.value}</p>
+              </div>
+            ))}
+          </div>
           {report.evidenceCoverage && (
             <p className="mt-1 font-mono text-[11px] text-slate-500">
               {report.evidenceCoverage.assetsRepresented}/{report.evidenceCoverage.totalAssetsTracked} assets in key frames ·{" "}
@@ -91,9 +130,6 @@ export default function ReportPage() {
             <button onClick={downloadCsv} className="rounded bg-amber-500 px-3 py-1.5 text-xs font-bold text-slate-950">
               Export CSV
             </button>
-            <span title="Support feature — time-boxed out of the hackathon build" className="cursor-help rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-500">
-              PDF export (coming soon)
-            </span>
           </div>
         </header>
         {report.defects.map((d) => (

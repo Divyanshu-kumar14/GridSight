@@ -49,6 +49,8 @@ export default function InspectionPage() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportFound, setReportFound] = useState(0);
   const [fps, setFps] = useState(30);
+  const [substation, setSubstation] = useState<string | null>(null);
+  const [tab, setTab] = useState<"assets" | "transcript" | "report">("assets");
 
   const fetchThumbs = useCallback(
     async (objs: TrackedObject[]) => {
@@ -105,6 +107,7 @@ export default function InspectionPage() {
       .then((json) => {
         const f = Number(json?.session?.videoFps);
         if (Number.isFinite(f) && f > 0) setFps(f);
+        if (typeof json?.session?.substationName === "string") setSubstation(json.session.substationName);
       })
       .catch(() => null);
     void refreshPersisted("mount");
@@ -425,7 +428,7 @@ export default function InspectionPage() {
         <WorkspaceSplit
           left={
           <div>
-            <VideoOverlayPlayer src={src} objects={objects} fps={fps} seekTo={seekTo} selectedId={selectedId} onTime={setCurrentTime} />
+            <VideoOverlayPlayer src={src} objects={objects} fps={fps} seekTo={seekTo} selectedId={selectedId} substation={substation ?? undefined} onTime={setCurrentTime} />
             <div className="mt-3">
               <Timeline objects={objects} duration={duration} currentTime={currentTime} onSeek={setSeekTo} />
             </div>
@@ -448,73 +451,99 @@ export default function InspectionPage() {
                 Cancel tracking
               </button>
             )}
-            <AssetList objects={objects} selectedId={selectedId} thumbs={thumbs} onSelect={seekToObject} />
-            <TranscriptPanel
-              segments={segments}
-              busy={transcribing === "running"}
-              error={transcribeError}
-              stagedName={stagedAudio ? stagedAudio.name : null}
-              tagged={tagged}
-              tagBusy={tagging === "running"}
-              tagError={tagError}
-              onAudioReady={setStagedAudio}
-              onTranscribe={transcribe}
-              onTag={tagAssets}
-              onSeek={setSeekTo}
-              onAssetClick={highlightAsset}
-              onEditSegment={editSegment}
-            />
-            <div className="panel p-4">
-              <div className="flex items-center gap-2">
-                <span className="micro-label">Defect report</span>
-                {report && (
-                  <span className="font-mono text-xs text-slate-500">
-                    C:{report.statistics.critical} H:{report.statistics.high} M:{report.statistics.medium} L:{report.statistics.low}
-                  </span>
+            <div className="panel overflow-hidden">
+              <div role="tablist" aria-label="Workspace panels" className="flex border-b border-line">
+                {(
+                  [
+                    { key: "assets", label: "ASSETS" },
+                    { key: "transcript", label: "TRANSCRIPT" },
+                    { key: "report", label: "REPORT" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.key}
+                    role="tab"
+                    aria-selected={tab === t.key}
+                    onClick={() => setTab(t.key)}
+                    className={`flex-1 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${tab === t.key ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="[&>*]:!border-0 [&>*]:!rounded-none">
+                {tab === "assets" && (
+                  <AssetList objects={objects} selectedId={selectedId} thumbs={thumbs} onSelect={seekToObject} />
+                )}
+                {tab === "transcript" && (
+                  <TranscriptPanel
+                    segments={segments}
+                    busy={transcribing === "running"}
+                    error={transcribeError}
+                    stagedName={stagedAudio ? stagedAudio.name : null}
+                    tagged={tagged}
+                    tagBusy={tagging === "running"}
+                    tagError={tagError}
+                    onAudioReady={setStagedAudio}
+                    onTranscribe={transcribe}
+                    onTag={tagAssets}
+                    onSeek={setSeekTo}
+                    onAssetClick={highlightAsset}
+                    onEditSegment={editSegment}
+                  />
+                )}
+                {tab === "report" && (
+                  <div className="p-4">
+                    <button
+                      onClick={generateReport}
+                      disabled={reporting === "running" || objects.length === 0}
+                      className="w-full rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-40"
+                    >
+                      {reporting === "running" ? `Analyzing… ${reportFound} defects` : report ? "Regenerate Report" : "Generate Report"}
+                    </button>
+                    {reporting === "running" && (
+                      <button
+                        onClick={cancelReport}
+                        className="mt-2 w-full rounded-md border border-line px-4 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-red-500 hover:text-red-300"
+                      >
+                        Cancel report
+                      </button>
+                    )}
+                    {reportError && <p role="alert" className="mt-2 text-xs text-red-400">{reportError}</p>}
+                    {report ? (
+                      <div className="mt-3">
+                        <div className="flex items-center gap-4">
+                          <SeverityDonut stats={report.statistics} />
+                          <div className="font-mono text-xs text-slate-400">
+                            <p>C <span className="text-red-400">{report.statistics.critical}</span> · H <span className="text-orange-400">{report.statistics.high}</span></p>
+                            <p className="mt-1">M <span className="text-yellow-400">{report.statistics.medium}</span> · L <span className="text-green-400">{report.statistics.low}</span></p>
+                            <p className="mt-1 text-slate-500">{report.defects.length} defects</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 text-xs text-slate-300">{report.summary}</p>
+                        <ul className="mt-2 space-y-1">
+                          {report.defects.slice(0, 3).map((d) => (
+                            <li key={d.id}>
+                              <button onClick={() => setSeekTo(d.frameTimestamp)} className="flex w-full items-center gap-2 rounded bg-ink px-2 py-1 text-left text-xs hover:bg-slate-800">
+                                <SeverityBadge severity={d.severity} />
+                                <span className="truncate text-slate-200">{d.title}</span>
+                                <span className="ml-auto font-mono text-slate-500">[{fmtClock(d.frameTimestamp)}]</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                        <a href={`/inspection/${sessionId}/report`} className="mt-3 block rounded-md bg-amber-500 px-4 py-2 text-center text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400">
+                          Open full report
+                        </a>
+                      </div>
+                    ) : (
+                      objects.length > 0 && (
+                        <p className="mt-2 text-xs text-slate-500">The full report opens here after generation.</p>
+                      )
+                    )}
+                  </div>
                 )}
               </div>
-              <button
-                onClick={generateReport}
-                disabled={reporting === "running" || objects.length === 0}
-                className="mt-2 w-full rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-40"
-              >
-                {reporting === "running" ? `Analyzing… ${reportFound} defects` : report ? "Regenerate Report" : "Generate Report"}
-              </button>
-              {reporting === "running" && (
-                <button
-                  onClick={cancelReport}
-                  className="mt-2 w-full rounded-md border border-line px-4 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-red-500 hover:text-red-300"
-                >
-                  Cancel report
-                </button>
-              )}
-              {reportError && <p role="alert" className="mt-2 text-xs text-red-400">{reportError}</p>}
-              {report ? (
-                <div className="mt-2">
-                  <p className="text-xs text-slate-300">{report.summary}</p>
-                  <ul className="mt-2 space-y-1">
-                    {report.defects.slice(0, 5).map((d) => (
-                      <li key={d.id}>
-                        <button onClick={() => setSeekTo(d.frameTimestamp)} className="flex w-full items-center gap-2 rounded bg-ink px-2 py-1 text-left text-xs hover:bg-slate-800">
-                          <SeverityBadge severity={d.severity} />
-                          <span className="truncate text-slate-200">{d.title}</span>
-                          <span className="ml-auto font-mono text-slate-500">[{fmtClock(d.frameTimestamp)}]</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  {report.defects.length > 5 && (
-                    <p className="mt-1 font-mono text-[10px] text-slate-500">+{report.defects.length - 5} more</p>
-                  )}
-                  <a href={`/inspection/${sessionId}/report`} className="mt-2 block text-xs text-amber-400 underline">
-                    Open full report →
-                  </a>
-                </div>
-              ) : (
-                objects.length > 0 && (
-                  <p className="mt-2 text-xs text-slate-500">The full report opens here after generation.</p>
-                )
-              )}
             </div>
           </div>
           }
@@ -533,6 +562,43 @@ function SeverityBadge({ severity }: { severity: string }) {
     <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-950 ${color}`}>
       {severity}
     </span>
+  );
+}
+
+function SeverityDonut({ stats }: { stats: { critical: number; high: number; medium: number; low: number } }) {
+  const parts = [
+    { count: stats.critical, color: "#ef4444" },
+    { count: stats.high, color: "#f97316" },
+    { count: stats.medium, color: "#eab308" },
+    { count: stats.low, color: "#22c55e" },
+  ];
+  const total = parts.reduce((n, p) => n + p.count, 0);
+  const C = 2 * Math.PI * 26;
+  let offset = 0;
+  return (
+    <svg width="72" height="72" viewBox="0 0 72 72" role="img" aria-label={`Severity donut: ${total} defects`} className="shrink-0 -rotate-90">
+      <circle cx="36" cy="36" r="26" fill="none" stroke="#1e293b" strokeWidth="10" />
+      {total > 0 &&
+        parts.map((p, i) => {
+          if (p.count === 0) return null;
+          const len = (p.count / total) * C;
+          const el = (
+            <circle
+              key={i}
+              cx="36"
+              cy="36"
+              r="26"
+              fill="none"
+              stroke={p.color}
+              strokeWidth="10"
+              strokeDasharray={`${len} ${C - len}`}
+              strokeDashoffset={-offset}
+            />
+          );
+          offset += len;
+          return el;
+        })}
+    </svg>
   );
 }
 

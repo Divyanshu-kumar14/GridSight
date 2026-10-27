@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Mic, Pencil, Square } from "lucide-react";
 import type { TaggedNote, TranscriptSegment } from "@/lib/types";
 
 // Contract: voice capture + transcript display + asset tags.
@@ -79,7 +80,7 @@ export default function TranscriptPanel({
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="cursor-pointer rounded-md border border-line px-2 py-1 text-xs text-slate-300 transition-colors hover:border-slate-500">
-          {stagedName ? `🎙 ${stagedName}` : "Choose audio"}
+          {stagedName ?? "Choose audio"}
           <input
             type="file"
             accept=".wav,.mp3,.m4a,.ogg,.webm,audio/*"
@@ -92,16 +93,16 @@ export default function TranscriptPanel({
           />
         </label>
         {recording ? (
-          <button onClick={stopRecording} className="rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">
-            ⏹ Stop ({ "REC" })
+          <button onClick={stopRecording} className="inline-flex items-center gap-1 rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">
+            <Square className="h-3 w-3" aria-hidden /> Stop (REC)
           </button>
         ) : (
           <button
             onClick={startRecording}
             disabled={busy}
-            className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 disabled:opacity-40"
           >
-            ● Record
+            <Mic className="h-3 w-3" aria-hidden /> Record
           </button>
         )}
         <button
@@ -201,7 +202,7 @@ export default function TranscriptPanel({
                     title="Correct transcript (demo fix, client-side only)"
                     className="text-slate-500 hover:text-slate-200"
                   >
-                    ✎
+                    <Pencil className="inline h-3 w-3" aria-hidden />
                   </button>
                 </>
               )}

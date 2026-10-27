@@ -16,6 +16,7 @@ export default function VideoOverlayPlayer({
   fps,
   seekTo,
   selectedId,
+  substation,
   onTime,
 }: {
   src: string | null;
@@ -23,6 +24,7 @@ export default function VideoOverlayPlayer({
   fps: number;
   seekTo: number | null;
   selectedId?: string | null;
+  substation?: string;
   onTime?: (t: number) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -139,11 +141,53 @@ export default function VideoOverlayPlayer({
     v.currentTime = Math.max(0, v.currentTime + frames / safeFps);
   };
 
+  const scrubDuration = objects.reduce((max, o) => {
+    const last = o.frames[o.frames.length - 1];
+    return last ? Math.max(max, last.timestamp) : max;
+  }, 0);
+
   return (
     <div>
       <div className="relative overflow-hidden rounded-md border border-line bg-black">
         <video ref={videoRef} src={src} controls className="max-h-[480px] w-full" preload="metadata" />
         <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
+        {/* HUD overlay */}
+        <div className="pointer-events-none absolute left-2 top-2 bg-black/70 px-2 py-1 font-mono text-[10px] tracking-wider text-slate-200">
+          {(substation ?? "GRIDSIGHT FEED").toUpperCase()} · {time.toFixed(2)}S · F{Math.floor(time * safeFps)}
+        </div>
+        <div className="pointer-events-none absolute right-2 top-2 bg-black/70 px-2 py-1 font-mono text-[10px] font-bold tracking-wider text-amber-400">
+          {objects.length} OBJECTS TRACKED
+        </div>
+        {scrubDuration > 0 && (
+          <div
+            className="absolute inset-x-2 bottom-10 h-4 cursor-pointer"
+            role="slider"
+            aria-label="Detection scrubber"
+            aria-valuenow={Math.round(time)}
+            aria-valuemin={0}
+            aria-valuemax={Math.round(scrubDuration)}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const v = videoRef.current;
+              if (v) v.currentTime = Math.min(scrubDuration, Math.max(0, ((e.clientX - rect.left) / rect.width) * scrubDuration));
+            }}
+          >
+            <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-slate-700" />
+            {objects.map((o) => {
+              const first = o.frames[0];
+              if (!first) return null;
+              return (
+                <span
+                  key={o.id}
+                  title={`${o.id} (${o.category})`}
+                  className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black"
+                  style={{ left: `${(first.timestamp / scrubDuration) * 100}%`, background: o.color }}
+                />
+              );
+            })}
+            <div className="absolute inset-y-0 w-0.5 bg-amber-500" style={{ left: `${(time / scrubDuration) * 100}%` }} />
+          </div>
+        )}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
         <button onClick={() => step(-1)} className="rounded-md border border-line px-2 py-1 text-slate-300">−1f</button>

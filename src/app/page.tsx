@@ -4,16 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  Check,
   FileCheck,
   Mic,
   ScanLine,
   Tags,
   Upload,
-  X,
   Zap,
 } from "lucide-react";
-import TrackingViewport from "@/components/TrackingViewport";
+import HeroFeed from "@/components/HeroFeed";
 import DotGridBackdrop from "@/components/DotGridBackdrop";
 import PipelineDiagram, { type PipelineDiagramStep } from "@/components/PipelineDiagram";
 import UploadZone, { type UploadForm } from "@/components/UploadZone";
@@ -29,9 +27,9 @@ const PIPELINE: PipelineDiagramStep[] = [
 ];
 
 const MODELS = [
-  { id: SAM_MODEL, role: "Eyes", desc: "Object Multiplex tracks 40+ grid assets simultaneously — one pass, ~7× the speed of solo tracking." },
-  { id: ASR_MODEL, role: "Ears", desc: "Diarized transcription turns drive-back voice memos into timestamped evidence." },
-  { id: SPARK_MODEL, role: "Analyst", desc: "Aligns notes to assets, then writes the severity-ranked defect report as structured JSON." },
+  { id: SAM_MODEL, icon: ScanLine, headline: "Eyes on every asset", sub: "Object Multiplex tracks 40+ grid assets simultaneously — one pass, ~7× the speed of solo tracking." },
+  { id: ASR_MODEL, icon: Mic, headline: "Ears on the drive back", sub: "Diarized transcription turns drive-back voice memos into timestamped evidence." },
+  { id: SPARK_MODEL, icon: FileCheck, headline: "Analyst on the record", sub: "Aligns notes to assets, then writes the severity-ranked defect report as structured JSON." },
 ];
 
 // Persuade surface: footage in, ranked defects out. No kickers, no metric cards,
@@ -111,7 +109,7 @@ export default function Home() {
           </p>
         </div>
         <div style={{ animation: "gs-rise 0.9s cubic-bezier(0.16,1,0.3,1) 0.12s both" }}>
-          <TrackingViewport />
+          <HeroFeed />
         </div>
       </section>
       </div>
@@ -134,50 +132,42 @@ export default function Home() {
             No wrappers around a single chatbot — each model does the job it was built for,
             and the pipeline closes the loop from pixels to work order.
           </p>
-          <dl className="mt-8 divide-y rounded-md border" style={{ borderColor: "var(--line)", ["--tw-divide-opacity" as string]: 1 }}>
-            {MODELS.map((m) => (
-              <div key={m.id} className="grid gap-1 px-4 py-4 sm:grid-cols-[220px_90px_1fr] sm:gap-4">
-                <dt className="font-mono text-sm text-amber-400">{m.id}</dt>
-                <dd className="micro-label">{m.role}</dd>
-                <dd className="text-sm leading-relaxed text-slate-400">{m.desc}</dd>
+          <div className="mt-8 flex flex-col items-stretch gap-3 md:flex-row md:items-center">
+            {MODELS.map((m, i) => (
+              <div key={m.id} className="contents md:flex md:flex-1 md:items-center md:gap-3">
+                <article className="panel flex-1 p-5">
+                  <m.icon className="h-8 w-8 text-amber-500" strokeWidth={1.75} aria-hidden />
+                  <h3 className="mt-3 text-lg font-bold tracking-tight text-slate-100">{m.headline}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-400">{m.sub}</p>
+                  <p className="mt-4 font-mono text-xs text-amber-400">{m.id}</p>
+                </article>
+                {i < MODELS.length - 1 && (
+                  <ArrowRight className="mx-auto h-5 w-5 shrink-0 rotate-90 text-slate-600 md:rotate-0" aria-hidden />
+                )}
               </div>
             ))}
-          </dl>
+          </div>
         </div>
       </section>
 
-      {/* Before / after */}
+      {/* Before / after — full-width timeline split */}
       <section className="border-t" style={{ borderColor: "var(--line)" }}>
-        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-14 md:grid-cols-2">
-          <div className="panel p-6">
-            <h3 className="text-lg font-bold text-slate-300">The climb</h3>
-            <ul className="mt-4 space-y-3 text-sm text-slate-400">
-              {[
-                "6 hours on a ladder with a clipboard and a thermal camera",
-                "About 20% of components eyeballed; the rest on hope",
-                "Handwritten notes become a PDF nobody opens",
-                "Outages cost $100K+ when the missed 80% fails",
-              ].map((t) => (
-                <li key={t} className="flex gap-2">
-                  <X className="mt-0.5 h-4 w-4 shrink-0 text-red-400" /> {t}
-                </li>
-              ))}
-            </ul>
+        <div className="mx-auto flex max-w-6xl flex-col px-4 py-14 md:flex-row">
+          <div className="flex-1 border border-red-900/60 bg-red-950/30 p-6 md:border-r-0">
+            <h3 className="micro-label !text-red-400">The climb</h3>
+            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-100">6 hours · ~80% coverage · defects escape</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-400">
+              A ladder, a clipboard, and a thermal camera. About 20% of components eyeballed;
+              handwritten notes become a report nobody opens.
+            </p>
           </div>
-          <div className="panel border-amber-500/40 p-6">
-            <h3 className="text-lg font-bold text-white">The GridSight pass</h3>
-            <ul className="mt-4 space-y-3 text-sm text-slate-300">
-              {[
-                "12 minutes of drone footage, zero ladders",
-                "Every visible asset tracked across every frame",
-                "Voice notes pinned to the exact asset they describe",
-                "Severity-ranked defects with actions, ready to assign",
-              ].map((t) => (
-                <li key={t} className="flex gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-400" /> {t}
-                </li>
-              ))}
-            </ul>
+          <div className="flex-1 border border-amber-900/60 bg-amber-950/30 p-6">
+            <h3 className="micro-label !text-amber-400">The GridSight pass</h3>
+            <p className="mt-3 text-3xl font-bold tracking-tight text-slate-100">15 min · every frame · zero missed</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              Drone footage in, every visible asset tracked, voice notes pinned to the asset
+              they describe, severity-ranked defects ready to assign.
+            </p>
           </div>
         </div>
       </section>
@@ -197,7 +187,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-6">
           <Zap className="h-4 w-4 text-amber-500" />
           <span className="text-sm font-bold">GridSight</span>
-          <span className="ml-auto font-mono text-xs text-slate-600">BUILT WITH SAM 3.1 · MUSE SPARK · MUSE VOICE TRANSCRIBE</span>
+          <span className="ml-auto font-mono text-xs text-slate-600">BUILT WITH SAM · SPARK · VOICE TRANSCRIBE</span>
         </div>
       </footer>
     </main>
