@@ -1,0 +1,29 @@
+{
+  "id": "f025",
+  "model": "muse-spark-1.3",
+  "evalVersion": 2,
+  "firstPass": "{\"defects\":[{\"category\":\"pole\",\"defect\":\"rust\",\"severity\":\"MEDIUM\",\"observation\":\"The tall metal pole in the left foreground shows extensive reddish-brown rust streaks along its lower length.\"}]}",
+  "verdictRaw": [
+    "{\"verdict\":\"keep\",\"reason\":\"The tall metal pole in the left foreground shows distinct reddish-brown rust streaks along its lower length.\"}"
+  ],
+  "after": [
+    {
+      "id": "f025-1",
+      "assetId": "pole-001",
+      "assetCategory": "pole",
+      "severity": "MEDIUM",
+      "title": "rust",
+      "description": "The tall metal pole in the left foreground shows extensive reddish-brown rust streaks along its lower length.",
+      "frameTimestamp": 24,
+      "recommendedAction": "Inspect and schedule repair",
+      "estimatedUrgency": "Next scheduled",
+      "observation": "The tall metal pole in the left foreground shows extensive reddish-brown rust streaks along its lower length.",
+      "evidenceFrameIndex": 0,
+      "evidenceSource": "visual",
+      "verification": {
+        "verdict": "keep",
+        "reason": "The tall metal pole in the left foreground shows distinct reddish-brown rust streaks along its lower length."
+      }
+    }
+  ]
+}

@@ -65,14 +65,14 @@ On 30 labeled frames (20 clean): 0 false positives, and the one real defect — 
 
 **Read that honestly.** The 10 defective frames are ten consecutive seconds of the *same* rusted pole, not ten independent defects. The set measures hallucination rate and single-defect recall; it is a smoke test, not a benchmark. There is no false positive here for the verifier to remove, so the table shows the verifier does not *harm* correct findings. The `downgrade` and `drop` paths are covered by unit tests in `src/lib/__tests__/verify.test.ts`.
 
-Reproduce offline with zero API calls:
+Reproduce these numbers with no API key and no network:
 
 ```bash
-npx tsx scripts/eval.ts          # cached scoring
-npx tsx scripts/eval.ts --live   # re-record fixtures (burns quota)
+npx tsx scripts/eval.ts          # scores the committed responses
+npx tsx scripts/eval.ts --live   # re-records them (burns quota, needs the clip)
 ```
 
-Ground truth lives in `fixtures/eval/labels.json` and was set by viewing the extracted frames before any model run.
+`fixtures/eval/cache/` holds the recorded per-frame responses and is committed. Ground truth lives in `fixtures/eval/labels.json` and was set by viewing the extracted frames before any model run.
 
 ## Quick start
 

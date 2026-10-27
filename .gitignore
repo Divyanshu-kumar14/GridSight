@@ -22,10 +22,11 @@ next-env.d.ts
 tmp/
 .gridsight/
 
-# Eval working material: extracted frames + per-frame model-response cache.
-# labels.json IS committed (ground truth); the clip is rebuildable (see scripts/eval.ts).
+# Eval material. labels.json (ground truth) and cache/ (recorded model responses)
+# are committed, so `npx tsx scripts/eval.ts` reproduces the published numbers on a
+# fresh clone with no API key and no network. The extracted frames and the source
+# clip stay local: derived images the cache already stands in for.
 fixtures/eval/frames/
-fixtures/eval/cache/
 fixtures/eval/source.mp4
 
 # Private planning docs (PRD + phased plan stay local, not for submission repo)

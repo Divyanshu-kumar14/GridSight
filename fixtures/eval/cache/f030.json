@@ -1,0 +1,29 @@
+{
+  "id": "f030",
+  "model": "muse-spark-1.3",
+  "evalVersion": 2,
+  "firstPass": "{\"defects\":[{\"category\":\"pole\",\"defect\":\"rust\",\"severity\":\"HIGH\",\"observation\":\"The vertical steel pole in the left foreground exhibits extensive reddish-brown rust along its shaft, heaviest at the base.\"}]}",
+  "verdictRaw": [
+    "{\"verdict\":\"keep\",\"reason\":\"The left foreground vertical pole displays visible reddish-brown rust streaking along its shaft with heavier corrosion toward the bottom.\"}"
+  ],
+  "after": [
+    {
+      "id": "f030-1",
+      "assetId": "pole-001",
+      "assetCategory": "pole",
+      "severity": "HIGH",
+      "title": "rust",
+      "description": "The vertical steel pole in the left foreground exhibits extensive reddish-brown rust along its shaft, heaviest at the base.",
+      "frameTimestamp": 29,
+      "recommendedAction": "Inspect and schedule repair",
+      "estimatedUrgency": "Immediate",
+      "observation": "The vertical steel pole in the left foreground exhibits extensive reddish-brown rust along its shaft, heaviest at the base.",
+      "evidenceFrameIndex": 0,
+      "evidenceSource": "visual",
+      "verification": {
+        "verdict": "keep",
+        "reason": "The left foreground vertical pole displays visible reddish-brown rust streaking along its shaft with heavier corrosion toward the bottom."
+      }
+    }
+  ]
+}
