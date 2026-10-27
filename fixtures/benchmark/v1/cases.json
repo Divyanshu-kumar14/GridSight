@@ -1,0 +1,210 @@
+{
+  "datasetVersion": "v1",
+  "unitOfEvaluation": "one case (not one frame); duplicate predictions for the same case count as false positives; results grouped by scene",
+  "iouThreshold": 0.5,
+  "cases": [
+    {
+      "groundTruth": {
+        "caseId": "B-01-visible-rust",
+        "scene": "east-bus",
+        "description": "Defective insulator with clearly visible rust; note matches asset interval.",
+        "clean": false,
+        "category": "insulator",
+        "defect": "rust",
+        "assetId": "insulator-003",
+        "evidenceFrame": 1,
+        "bbox": { "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2 },
+        "voiceAssetId": "insulator-003"
+      },
+      "predictions": [
+        {
+          "caseId": "B-01-visible-rust",
+          "category": "insulator",
+          "defect": "rust",
+          "assetId": "insulator-003",
+          "evidenceFrame": 1,
+          "bbox": { "x": 0.1, "y": 0.1, "w": 0.2, "h": 0.2 },
+          "evidenceSource": "visual",
+          "assetAssociation": "confirmed",
+          "verification": "keep"
+        }
+      ]
+    },
+    {
+      "groundTruth": {
+        "caseId": "B-02-clean",
+        "scene": "east-bus",
+        "description": "Clean transformer; no defect should be reported.",
+        "clean": true,
+        "category": "transformer",
+        "defect": "",
+        "assetId": null,
+        "evidenceFrame": null,
+        "bbox": null
+      },
+      "predictions": []
+    },
+    {
+      "groundTruth": {
+        "caseId": "B-03-same-category",
+        "scene": "north-string",
+        "description": "Two insulators share a category; defect is on 002 only. Wrong-ID prediction must fail.",
+        "clean": false,
+        "category": "insulator",
+        "defect": "crack",
+        "assetId": "insulator-002",
+        "evidenceFrame": 0,
+        "bbox": { "x": 0.7, "y": 0.7, "w": 0.1, "h": 0.1 },
+        "voiceAssetId": "insulator-002"
+      },
+      "predictions": [
+        {
+          "caseId": "B-03-same-category",
+          "category": "insulator",
+          "defect": "crack",
+          "assetId": "insulator-002",
+          "evidenceFrame": 0,
+          "bbox": { "x": 0.7, "y": 0.7, "w": 0.1, "h": 0.1 },
+          "evidenceSource": "visual",
+          "assetAssociation": "confirmed",
+          "verification": "keep"
+        }
+      ]
+    },
+    {
+      "groundTruth": {
+        "caseId": "B-04-late-visible",
+        "scene": "west-bus",
+        "description": "Damage appears late in a 0-30s track; note at 24-26s. Early frame is wrong evidence.",
+        "clean": false,
+        "category": "pole",
+        "defect": "rust",
+        "assetId": "pole-007",
+        "evidenceFrame": 2,
+        "bbox": { "x": 0.2, "y": 0.2, "w": 0.2, "h": 0.2 },
+        "voiceAssetId": "pole-007"
+      },
+      "predictions": [
+        {
+          "caseId": "B-04-late-visible",
+          "category": "pole",
+          "defect": "rust",
+          "assetId": "pole-007",
+          "evidenceFrame": 2,
+          "bbox": { "x": 0.2, "y": 0.2, "w": 0.2, "h": 0.2 },
+          "evidenceSource": "visual",
+          "assetAssociation": "confirmed",
+          "verification": "keep"
+        }
+      ]
+    },
+    {
+      "groundTruth": {
+        "caseId": "B-05-two-notes",
+        "scene": "switchyard",
+        "description": "Two voice notes refer to different assets/intervals; both should link correctly.",
+        "clean": false,
+        "category": "connector",
+        "defect": "heat discoloration",
+        "assetId": "connector-001",
+        "evidenceFrame": 1,
+        "bbox": null,
+        "voiceAssetId": "connector-001"
+      },
+      "predictions": [
+        {
+          "caseId": "B-05-two-notes",
+          "category": "connector",
+          "defect": "heat discoloration",
+          "assetId": "connector-001",
+          "evidenceFrame": 1,
+          "bbox": null,
+          "evidenceSource": "visual",
+          "assetAssociation": "confirmed",
+          "verification": "downgrade"
+        }
+      ]
+    },
+    {
+      "groundTruth": {
+        "caseId": "B-06-unmatched-note",
+        "scene": "switchyard",
+        "description": "Inspector note has no reliable asset match; system must leave the link unresolved.",
+        "clean": false,
+        "category": "transformer",
+        "defect": "low oil",
+        "assetId": null,
+        "evidenceFrame": null,
+        "bbox": null,
+        "voiceAssetId": null
+      },
+      "predictions": [
+        {
+          "caseId": "B-06-unmatched-note",
+          "category": "transformer",
+          "defect": "low oil",
+          "assetId": null,
+          "evidenceFrame": null,
+          "bbox": null,
+          "evidenceSource": "voice",
+          "assetAssociation": "unresolved",
+          "verification": null
+        }
+      ]
+    },
+    {
+      "groundTruth": {
+        "caseId": "B-07-occluded",
+        "scene": "fence-line",
+        "description": "Occluded asset with invalid/insufficient visual evidence; no box may be rendered.",
+        "clean": false,
+        "category": "insulator",
+        "defect": "corrosion",
+        "assetId": "insulator-009",
+        "evidenceFrame": null,
+        "bbox": null,
+        "voiceAssetId": "insulator-009"
+      },
+      "predictions": [
+        {
+          "caseId": "B-07-occluded",
+          "category": "insulator",
+          "defect": "corrosion",
+          "assetId": "insulator-009",
+          "evidenceFrame": null,
+          "bbox": null,
+          "evidenceSource": "voice",
+          "assetAssociation": "unresolved",
+          "verification": "skipped"
+        }
+      ]
+    },
+    {
+      "groundTruth": {
+        "caseId": "B-08-wrong-frame",
+        "scene": "west-bus",
+        "description": "Second pole in the same scene; pipeline must cite the late frame (2), not an early one. The scorer rejects label-only matches with the wrong frame or box (proven by unit tests).",
+        "clean": false,
+        "category": "pole",
+        "defect": "rust",
+        "assetId": "pole-011",
+        "evidenceFrame": 2,
+        "bbox": { "x": 0.3, "y": 0.3, "w": 0.2, "h": 0.2 },
+        "voiceAssetId": "pole-011"
+      },
+      "predictions": [
+        {
+          "caseId": "B-08-wrong-frame",
+          "category": "pole",
+          "defect": "rust",
+          "assetId": "pole-011",
+          "evidenceFrame": 2,
+          "bbox": { "x": 0.3, "y": 0.3, "w": 0.2, "h": 0.2 },
+          "evidenceSource": "visual",
+          "assetAssociation": "confirmed",
+          "verification": "keep"
+        }
+      ]
+    }
+  ]
+}

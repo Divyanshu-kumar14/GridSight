@@ -108,13 +108,25 @@ export interface EvalDefect {
   defect: string;
   severity: Defect["severity"];
   observation: string;
+  /** Optional model-reported box in ORIGINAL submitted-image coordinates.
+   * Shape-checked only here; strict range validation happens server-side in
+   * eval-static-lib (invalid boxes are rejected, never repaired). */
+  bbox?: { x: number; y: number; width: number; height: number };
 }
+
+const evalBoxSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+});
 
 const evalDefectSchema = z.object({
   category: z.string().min(1),
   defect: z.string().min(1),
   severity: z.enum(["CRITICAL", "HIGH", "MEDIUM", "LOW"]),
   observation: z.string().min(1),
+  bbox: evalBoxSchema.optional(),
 });
 
 const evalEnvelopeSchema = z.object({ defects: z.array(evalDefectSchema) });

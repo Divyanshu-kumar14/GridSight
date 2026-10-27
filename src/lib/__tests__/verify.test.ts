@@ -233,4 +233,46 @@ describe("verifyDefects", () => {
     expect(await verifyDefects([], baseOpts(client))).toEqual([]);
     expect(create).not.toHaveBeenCalled();
   });
+
+  it("verifies the cited frame, not the nearest timestamp", async () => {
+    let seenImage = "";
+    const create = vi.fn(async (args: unknown) => {
+      const parts = (args as { messages: { content: { text?: string; image_url?: { url: string } }[] }[] }).messages[1].content;
+      for (const p of parts) {
+        if (p.image_url?.url) seenImage = p.image_url.url;
+      }
+      return { choices: [{ message: { content: keepPayload("cited frame confirms rust") } }] };
+    });
+    const client = { chat: { completions: { create } } } as unknown as OpenAI;
+    const frames = [
+      { timestamp: 5, base64: "NEAREST" },
+      { timestamp: 30, base64: "CITED" },
+    ];
+    // frameTimestamp (6) is nearest to frames[0], but the finding cites frames[1].
+    const d: Defect = { ...visual("cited", "HIGH", 6), evidenceFrameIndex: 1 };
+    const out = await verifyDefects([d], { ...baseOpts(client), frames });
+    expect(seenImage).toBe("data:image/jpeg;base64,CITED");
+    expect(out[0].verification?.verdict).toBe("keep");
+  });
+
+  it("marks skipped when the cited frame is missing or invalid", async () => {
+    const { client, create } = mockClient(async () => keepPayload());
+    const frames = [{ timestamp: 10, base64: "AAA" }];
+    const badIdx: Defect = { ...visual("bad", "HIGH", 10), evidenceFrameIndex: 9 };
+    const noIdx: Defect = { ...visual("none", "HIGH", 10), evidenceFrameIndex: undefined };
+    const out = await verifyDefects([badIdx, noIdx], { ...baseOpts(client), frames });
+    expect(create).not.toHaveBeenCalled(); // no model call fabricates verification
+    expect(out).toHaveLength(2);
+    expect(out.every((d) => d.verification?.verdict === "skipped")).toBe(true);
+    // Findings are preserved with evidence intact — never dropped, never auto-kept.
+    expect(out.every((d) => d.evidenceSource === "visual")).toBe(true);
+  });
+
+  it("treats an empty frame array as unverifiable, never as verified", async () => {
+    const { client, create } = mockClient(async () => keepPayload());
+    const out = await verifyDefects([visual("e")], { ...baseOpts(client), frames: [] });
+    expect(create).not.toHaveBeenCalled();
+    expect(out[0].verification?.verdict).toBe("skipped");
+    expect(out[0].evidenceSource).toBe("visual");
+  });
 });

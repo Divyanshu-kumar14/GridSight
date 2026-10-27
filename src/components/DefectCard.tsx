@@ -19,6 +19,34 @@ const evidenceBadge = (d: Defect) =>
     ? "border-green-500 text-green-400"
     : "border-amber-500/60 text-amber-400";
 
+const associationBadge = (d: Defect) =>
+  d.assetAssociation === "unresolved"
+    ? "border-slate-500 text-slate-400"
+    : d.assetAssociation === "confirmed"
+      ? "border-sky-500/60 text-sky-300"
+      : "border-slate-700 text-slate-600";
+
+function isRenderableBox(box: Defect["overlayBox"]): boolean {
+  if (!box) return false;
+  const { x, y, w, h } = box;
+  return (
+    Number.isFinite(x) &&
+    Number.isFinite(y) &&
+    Number.isFinite(w) &&
+    Number.isFinite(h) &&
+    x >= 0 &&
+    x <= 1 &&
+    y >= 0 &&
+    y <= 1 &&
+    w > 0 &&
+    w <= 1 &&
+    h > 0 &&
+    h <= 1 &&
+    x + w <= 1 + 1e-6 &&
+    y + h <= 1 + 1e-6
+  );
+}
+
 const verifyBadge: Record<string, string> = {
   keep: "border-green-500 text-green-400",
   downgrade: "border-amber-500/60 text-amber-400",
@@ -40,7 +68,7 @@ export default function DefectCard({
   defect: Defect;
   onSeek: (t: number) => void;
 }) {
-  const box = defect.overlayBox;
+  const box = isRenderableBox(defect.overlayBox) ? defect.overlayBox : null;
   return (
     <article className="panel p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -50,6 +78,18 @@ export default function DefectCard({
         <span className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${evidenceBadge(defect)}`}>
           {defect.evidenceSource === "visual" ? "VISUAL" : "VOICE ONLY"}
         </span>
+        {defect.assetAssociation && (
+          <span
+            title={
+              defect.assetAssociation === "unresolved"
+                ? "Asset association could not be confirmed — no bounding box borrowed from another asset."
+                : "Asset association confirmed against tracked IDs."
+            }
+            className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${associationBadge(defect)}`}
+          >
+            {defect.assetAssociation === "unresolved" ? "ASSET UNCONFIRMED" : "ASSET CONFIRMED"}
+          </span>
+        )}
         <h3 className="text-sm font-bold tracking-tight text-slate-100">{defect.title}</h3>
         <span className="ml-auto font-mono text-xs text-slate-500">
           {defect.assetId} · {defect.assetCategory}

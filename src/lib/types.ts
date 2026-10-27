@@ -88,6 +88,19 @@ export interface DefectReport {
   // Provenance: which Spark endpoint wrote the defects (open-weight prize proof).
   // Optional so existing fixtures and stored reports still parse.
   modelRun?: { provider: SparkProvider; model: string };
+  // Coverage transparency (SERVER-COMPUTED from tracking + key frames + defects,
+  // never model-generated). Optional so legacy reports still parse.
+  evidenceCoverage?: EvidenceCoverage;
+}
+
+// Server-computed coverage ledger for the 8-frame budget: distinguishes what was
+// actually shown to the report model from what was only heard in voice notes.
+export interface EvidenceCoverage {
+  totalAssetsTracked: number;
+  assetsRepresented: number; // distinct tracked assets with a selected key frame
+  visualFindings: number; // defects with evidenceSource === "visual"
+  voiceOnlyFindings: number; // defects sourced only from inspector notes
+  verificationSkipped: number; // visual defects with no keep/downgrade/drop verdict
 }
 
 export interface InspectionMetadata {
@@ -118,6 +131,11 @@ export interface Defect {
   observation?: string; // what is actually visible in the cited frame
   evidenceSource?: "visual" | "voice"; // SERVER-COMPUTED, never trusted from the model
   overlayBox?: BoundingBox; // SERVER-COMPUTED tracked bbox at defect time (deterministic overlay)
+  // Asset-association status (SERVER-COMPUTED via attachOverlayBox, never trusted
+  // from the model). "confirmed" = exact assetId hit with a valid bbox attached.
+  // "unresolved" = no exact hit or no valid bbox — finding is preserved, no box is
+  // borrowed from another asset. Absent on legacy stored reports (treated as unknown).
+  assetAssociation?: "confirmed" | "unresolved";
   // Second-pass audit (see verify.ts): the model re-checks its own visual claim
   // against the cited frame. Absent on voice-only findings (never verified).
   verification?: {

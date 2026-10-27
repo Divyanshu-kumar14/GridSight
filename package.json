@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "eval": "tsx scripts/eval.ts"
+    "eval": "tsx scripts/eval.ts",
+    "eval:smoke": "tsx scripts/eval-smoke.ts",
+    "bench": "tsx scripts/bench.ts",
+    "bench:real": "tsx scripts/bench.ts --dataset=real-v1"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

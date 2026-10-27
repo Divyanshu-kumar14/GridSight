@@ -71,6 +71,13 @@ export default function ReportPage() {
           <p className="mt-1 font-mono text-xs text-slate-400">
             {report.inspection.date} · {report.inspection.inspector} · {report.inspection.totalAssetsTracked} assets tracked · {report.inspection.coveragePercent}% coverage
           </p>
+          {report.evidenceCoverage && (
+            <p className="mt-1 font-mono text-[11px] text-slate-500">
+              {report.evidenceCoverage.assetsRepresented}/{report.evidenceCoverage.totalAssetsTracked} assets in key frames ·{" "}
+              {report.evidenceCoverage.visualFindings} visual · {report.evidenceCoverage.voiceOnlyFindings} voice-only ·{" "}
+              {report.evidenceCoverage.verificationSkipped} verification skipped
+            </p>
+          )}
           {report.modelRun && (
             <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.14em] text-slate-500">
               {report.modelRun.model} · {report.modelRun.provider}

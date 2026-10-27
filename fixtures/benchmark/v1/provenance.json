@@ -1,0 +1,14 @@
+{
+  "dataset": "GridSight synthetic pipeline-logic benchmark",
+  "datasetVersion": "v1",
+  "synthetic": true,
+  "source": "Hand-authored JSON fixtures in fixtures/benchmark/v1/cases.json; no real images, no downloaded datasets, no repository bloat.",
+  "licenseBasis": "Original synthetic content created for this repository; no third-party media, no license obligations.",
+  "annotationMethod": "Cases written directly against the pipeline contracts in src/lib/report.ts (pickKeyTimestamps, labelEvidence, attachOverlayBox, computeEvidenceCoverage) and src/lib/verify.ts; expected values set before running the scorer and never tuned to predictions.",
+  "realMediaProvenance": "Real visual provenance lives separately in fixtures/eval/ (30 frames from fixtures/eval/source.mp4, itself rebuilt from three CC-licensed Wikimedia Commons photos via Ken Burns zoompan; labels set by viewing extracted frames before any model run). That visual set is evaluated only by scripts/eval.ts and is NOT part of this synthetic benchmark.",
+  "limitations": [
+    "Synthetic: measures evidence handling (association, frame correctness, verification, coverage), NOT visual detection accuracy on real imagery.",
+    "Must not be presented as real-world visual benchmark results to judges.",
+    "Live Meta inference is out of scope for this benchmark; use scripts/eval.ts --live for the visual set with explicit credentials and quota."
+  ]
+}

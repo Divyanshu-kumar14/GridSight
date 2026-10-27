@@ -11,6 +11,7 @@ import {
   REPORT_SYSTEM_PROMPT,
   attachFrameCaptures,
   attachOverlayBox,
+  computeEvidenceCoverage,
   coveragePercent,
   labelEvidence,
   pickKeyTimestamps,
@@ -119,7 +120,11 @@ export async function POST(req: Request): Promise<Response> {
         updateSession(sessionId, { status: "generating" });
         send("report_started", { sessionId, objects: objects.length, jobId: job.id });
 
-        // Key frames: first-seen per object (capped), best-effort — missing video skips silently here, loudly in logs.
+        // Key frames: note-anchored + timeline-spread (capped), best-effort — missing
+        // video skips silently here, loudly in logs. Order is chronological and
+        // stable: FRAME i === stamps[i] for every successfully extracted frame,
+        // so evidenceFrameIndex stays mapped. Failures are skipped WITHOUT
+        // re-sorting; indices always refer to the final frames array.
         const frames: KeyFrame[] = [];
         const videoPath = await findSessionVideo(sessionId);
         if (videoPath) {
@@ -156,8 +161,9 @@ export async function POST(req: Request): Promise<Response> {
             type: "text",
             text: JSON.stringify({
               frames_attached: frames.length,
+              total_assets_tracked: objects.length,
               frame_note:
-                "The attached key frames FRAME 0..N are the visual ground truth, in order. Cite visual claims with evidenceFrameIndex.",
+                "The attached key frames FRAME 0..N are the visual ground truth, in order. Cite visual claims with evidenceFrameIndex into this exact order. Only a subset of assets is shown — never claim all assets were visually checked.",
               tracked_assets: objects.map((o) => ({
                 id: o.id,
                 category: o.category,
@@ -260,7 +266,13 @@ export async function POST(req: Request): Promise<Response> {
         // No generative annotation on the critical path: Muse Image edits can
         // invent damage on a clean frame, unacceptable in a safety context.
         // Defects render with their real key frame + deterministic bbox overlay.
+        // assetAssociation (confirmed/unresolved) is server-computed inside
+        // attachOverlayBox; evidenceSource stays separate so an unconfirmed
+        // asset link never demotes a visually supported finding to voice-only.
         const finalDefects = defects;
+
+        // Coverage transparency from actual pipeline data (never model counts).
+        const evidenceCoverage = computeEvidenceCoverage(objects, frames, finalDefects);
 
         const report: DefectReport = {
           id: `rep-${sessionId.slice(0, 8)}`,
@@ -277,6 +289,7 @@ export async function POST(req: Request): Promise<Response> {
           summary,
           defects: finalDefects,
           statistics: { ...rollupStats(finalDefects), verification: verificationCounts },
+          evidenceCoverage,
           generatedAt: now,
           // Provenance: which Spark endpoint wrote these defects.
           modelRun: { provider: spark.provider, model: spark.model },
