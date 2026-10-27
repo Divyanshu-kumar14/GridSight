@@ -7,8 +7,8 @@ import { completeJob, createJob, failJob, isCancelled, updateJobProgress } from 
 import {
   isStreamClosedError,
   runTrackPrompts,
-  TRACK_CANCELLED,
 } from "@/lib/track-run";
+import { TRACK_CANCELLED } from "@/lib/sam";
 
 // POST /api/track — { sessionId, prompts[] } → SSE stream.
 // Events: progress | object_detected | frame_complete | tracking_complete.
@@ -68,6 +68,22 @@ export async function POST(req: Request): Promise<Response> {
       };
       // Visible to catch: how much survived if a late send fails.
       let lastPersisted = 0;
+      // Upstream cancellation: aborting this controller tears down the
+      // in-flight provider request. Wired to client disconnect below and to
+      // manual cancel in onFrame. Do not claim provider work stopped unless
+      // this abort (or a completed stream) actually ran.
+      const upstream = new AbortController();
+      try {
+        req.signal?.addEventListener?.("abort", () => {
+          try {
+            upstream.abort();
+          } catch {
+            /* already settled */
+          }
+        });
+      } catch {
+        /* signal unsupported — closed-send path remains the backstop */
+      }
       try {
         updateSession(sessionId, { status: "tracking" });
         send("started", { jobId: job.id });
@@ -102,7 +118,16 @@ export async function POST(req: Request): Promise<Response> {
           onFrame: ({ prompt: category, promptIndex: pi, frameIndex, totalSoFar }) => {
             totalFrames = Math.max(totalFrames, frameIndex);
             updateJobProgress(job.id, pi, prompts.length);
-            if (isCancelled(job.id)) throw new Error(TRACK_CANCELLED);
+            if (isCancelled(job.id)) {
+              // Manual cancel: tear down the provider request now, not at
+              // the next parsed frame (empty streams may never emit one).
+              try {
+                upstream.abort();
+              } catch {
+                /* already settled */
+              }
+              throw new Error(TRACK_CANCELLED);
+            }
             // Honest progress: share of expected frames for this prompt's slice.
             const frac =
               expectedTotal > 0
@@ -118,6 +143,7 @@ export async function POST(req: Request): Promise<Response> {
             send("object_detected", { prompt: category, count });
             send("frame_complete", { prompt: category, totalFrames });
           },
+          signal: upstream.signal,
         });
         completedPrompts = outcome.completedPrompts;
         if (outcome.status === "complete") {
@@ -138,6 +164,18 @@ export async function POST(req: Request): Promise<Response> {
             partialObjects: outcome.objects.length,
             completedPrompts,
           });
+          closed(() => controller.close());
+          return;
+        }
+        if (outcome.status === "disconnected") {
+          // Provider work was aborted on client disconnect (req.signal fired
+          // upstream.abort(); see above). Completed prompts are persisted;
+          // the cancel flag was never set, so this is not a manual cancel.
+          failJob(
+            job.id,
+            `client disconnected; partial results preserved (${outcome.objects.length} objects)`,
+          );
+          updateSession(sessionId, { status: "error" });
           closed(() => controller.close());
           return;
         }

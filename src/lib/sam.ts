@@ -215,6 +215,7 @@ const RETRY_DELAYS_MS = [2000, 4000, 8000];
 export async function withRetry<T>(
   fn: () => Promise<T>,
   delaysMs: number[] = RETRY_DELAYS_MS,
+  retryable: (err: unknown) => boolean = () => true,
 ): Promise<T> {
   let last: unknown;
   for (let attempt = 0; attempt <= delaysMs.length; attempt++) {
@@ -222,11 +223,56 @@ export async function withRetry<T>(
       return await fn();
     } catch (err) {
       last = err;
+      if (!retryable(err)) throw err;
       if (attempt === delaysMs.length) break;
       await new Promise((r) => setTimeout(r, delaysMs[attempt]));
     }
   }
   throw last;
+}
+
+// ============ Retry safety: what may be retried ============
+//
+// trackPrompt streams provider output while also invoking downstream progress
+// callbacks. Three failure classes must NEVER be retried as provider errors:
+// cooperative cancellation, client aborts, and dead-stream sends (retrying
+// those re-burns quota and delays termination). HTTP 4xx (other than 429 and
+// the retryable 408/425) will not heal on retry either.
+
+/** Cooperative-cancel sentinel thrown by progress callbacks. Never surfaced, never retried. */
+export const TRACK_CANCELLED = "__CANCELLED__";
+
+export function isAbortError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "AbortError" || /\babort/i.test(err.message))
+  );
+}
+
+/**
+ * True when a send/stream failure means only that the client went away
+ * (observed: "Invalid state: Controller is already closed"). Such failures
+ * must be reported as a disconnect — never as a model error, never retried.
+ */
+export function isStreamClosedError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /already closed/i.test(msg);
+}
+
+function providerStatus(err: unknown): number | null {
+  const s = (err as { status?: unknown } | null)?.status;
+  return typeof s === "number" ? s : null;
+}
+
+/** Only retry failures that are safe and meaningful: transient network/5xx and rate limits. */
+export function isRetryableProviderError(err: unknown): boolean {
+  if (err instanceof Error && err.message === TRACK_CANCELLED) return false;
+  if (isAbortError(err)) return false;
+  if (isStreamClosedError(err)) return false;
+  const status = providerStatus(err);
+  if (status !== null && status >= 400 && status < 500 && status !== 408 && status !== 425 && status !== 429)
+    return false;
+  return true;
 }
 
 // ============ Network: Files upload ============
@@ -245,6 +291,48 @@ export async function uploadVideoToFiles(
   return created.id;
 }
 
+// ============ Bounded opt-in diagnostics (GRIDSIGHT_DEBUG_SAM=1) ============
+// Distinguishes "model returned nothing" from "parser recognized nothing".
+// Additive logging only: parser, prompts, retries, and schema are untouched.
+// Never logs credentials, full masks, or media payloads: the head is capped
+// and mask blobs are redacted before logging. Raw responses are never dumped.
+
+export const SAM_DEBUG_HEAD_CHARS = 1500;
+
+export interface SamDebugSummary {
+  prompt: string;
+  totalChars: number;
+  maxDeltaChars: number;
+  maxLineBuffer: number;
+  streamCompleted: boolean;
+  parsedFrames: number;
+  matchedRecords: number;
+  head: string;
+}
+
+/** Drop mask blobs (which dominate multi-MB responses) but keep box coords. */
+export function redactMaskPayloads(head: string): string {
+  return head.replace(/data=\S+/g, "data=<redacted>");
+}
+
+/** Pure one-line stderr summary. Truncated, redacted, counts — never secrets. */
+export function formatSamDebug(summary: SamDebugSummary): string {
+  const head = redactMaskPayloads(summary.head.slice(0, SAM_DEBUG_HEAD_CHARS))
+    .replace(/\s+/g, " ")
+    .trim();
+  return (
+    `[sam-debug] prompt=${JSON.stringify(summary.prompt)} ` +
+    `chars=${summary.totalChars} maxDelta=${summary.maxDeltaChars} maxLine=${summary.maxLineBuffer} ` +
+    `completed=${summary.streamCompleted} ` +
+    `parsedFrames=${summary.parsedFrames} matchedRecords=${summary.matchedRecords} ` +
+    `head=${JSON.stringify(head)}`
+  );
+}
+
+export function samDebugEnabled(): boolean {
+  return process.env.GRIDSIGHT_DEBUG_SAM === "1";
+}
+
 // ============ Network: SAM track ============
 
 export interface TrackProgress {
@@ -252,44 +340,94 @@ export interface TrackProgress {
   totalSoFar: number;
 }
 
+export interface TrackPromptOptions {
+  /** AbortSignal forwarded to the provider request (manual cancel, client disconnect). */
+  signal?: AbortSignal;
+}
+
 export async function trackPrompt(
   fileId: string,
   prompt: string,
   onProgress?: (p: TrackProgress) => void,
+  opts?: TrackPromptOptions,
 ): Promise<{ frameIndex: number; detections: RawDetection[] }[]> {
   const client = getMetaClient();
-  const collected: { frameIndex: number; detections: RawDetection[] }[] = [];
-  await withRetry(async () => {
-    const stream = await client.responses.create({
-      model: SAM_MODEL,
-      stream: true,
-      input: [
+  const debug = samDebugEnabled()
+    ? { head: "", totalChars: 0, maxDelta: 0, maxLine: 0, completed: false }
+    : null;
+  // Retry isolation: every provider attempt gets its own detections and
+  // parser state. A failed attempt's frames must never leak into a retry.
+  const collected = await withRetry(
+    async () => {
+      const attempt: { frameIndex: number; detections: RawDetection[] }[] = [];
+      const stream = await client.responses.create(
         {
-          type: "message",
-          role: "user",
-          content: [
-            { type: "input_text", text: prompt },
-            { type: "input_video", file_id: fileId },
+          model: SAM_MODEL,
+          stream: true,
+          input: [
+            {
+              type: "message",
+              role: "user",
+              content: [
+                { type: "input_text", text: prompt },
+                { type: "input_video", file_id: fileId },
+              ],
+            },
           ],
-        },
-      ],
-    } as never);
-    // Accumulate deltas: one record can straddle events (P1 split-record fix).
-    const acc = createSamStream();
-    const emit = (parsed: { frameIndex: number; detections: RawDetection[] }) => {
-      collected.push(parsed);
-      onProgress?.({
-        frameIndex: parsed.frameIndex,
-        totalSoFar: collected.length,
-      });
-    };
-    for await (const event of stream as unknown as AsyncIterable<unknown>) {
-      const text = extractTextDelta(event);
-      if (!text) continue;
-      for (const parsed of pushSamDelta(acc, text)) emit(parsed);
-    }
-    for (const parsed of flushSamStream(acc)) emit(parsed);
-  });
+        } as never,
+        { signal: opts?.signal ?? undefined } as never,
+      );
+      // Accumulate deltas: one record can straddle events (P1 split-record fix).
+      const acc = createSamStream();
+      const emit = (parsed: { frameIndex: number; detections: RawDetection[] }) => {
+        attempt.push(parsed);
+        onProgress?.({
+          frameIndex: parsed.frameIndex,
+          totalSoFar: attempt.length,
+        });
+      };
+      for await (const event of stream as unknown as AsyncIterable<unknown>) {
+        const text = extractTextDelta(event);
+        if (!text) continue;
+        if (debug) {
+          // Bounded: counters only, plus a capped head. Never retain the stream.
+          debug.totalChars += text.length;
+          if (text.length > debug.maxDelta) debug.maxDelta = text.length;
+          for (const part of text.split("\n")) {
+            if (part.length > debug.maxLine) debug.maxLine = part.length;
+          }
+          if (debug.head.length < SAM_DEBUG_HEAD_CHARS) {
+            debug.head += text.slice(0, SAM_DEBUG_HEAD_CHARS - debug.head.length);
+          }
+        }
+        for (const parsed of pushSamDelta(acc, text)) emit(parsed);
+      }
+      for (const parsed of flushSamStream(acc)) emit(parsed);
+      if (debug) {
+        debug.completed = true;
+        // Line-buffer high-water mark (partial lines held between chunks).
+        if (acc.buffer.length > debug.maxLine) debug.maxLine = acc.buffer.length;
+      }
+      return attempt;
+    },
+    undefined,
+    isRetryableProviderError,
+  );
+  if (debug) {
+    const matchedRecords = collected.reduce((n, f) => n + f.detections.length, 0);
+    console.error(
+      formatSamDebug({
+        prompt,
+        totalChars: debug.totalChars,
+        maxDeltaChars: debug.maxDelta,
+        maxLineBuffer: debug.maxLine,
+        streamCompleted: debug.completed,
+        parsedFrames: collected.length,
+        matchedRecords,
+        head: debug.head,
+      }),
+    );
+  }
   return collected;
 }
 

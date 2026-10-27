@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  isStreamClosedError,
   runTrackPrompts,
-  TRACK_CANCELLED,
   TRACK_BUDGET_MS,
   type TrackRunDeps,
 } from "../track-run";
+import { isStreamClosedError, TRACK_CANCELLED } from "../sam";
 import type { TrackedObject } from "../types";
 
 // Deterministic canned SAM frames — no network, no quota.
@@ -149,5 +148,61 @@ describe("runTrackPrompts orchestration", () => {
     expect(isStreamClosedError(new Error(TRACK_CANCELLED))).toBe(false);
     expect(isStreamClosedError("already closed")).toBe(true);
     expect(isStreamClosedError(null)).toBe(false);
+  });
+
+  it("passes the abort signal through to the provider call", async () => {
+    const seen: unknown[] = [];
+    const trackPrompt = vi.fn(async (...a: unknown[]) => {
+      seen.push(a[3]);
+      return [det("0")];
+    });
+    const controller = new AbortController();
+    const { deps } = harness({
+      prompts: ["pole"],
+      trackPrompt: trackPrompt as never,
+      signal: controller.signal,
+    });
+    const out = await runTrackPrompts(deps);
+    expect(out.status).toBe("complete");
+    expect(trackPrompt).toHaveBeenCalledOnce();
+    expect((seen[0] as { signal?: AbortSignal }).signal).toBe(controller.signal);
+  });
+
+  it("enforces the budget during a prompt, not just between prompts", async () => {
+    let t = 0;
+    const trackPrompt = vi.fn(
+      async (_f: string, _c: string, onProgress?: (p: { frameIndex: number; totalSoFar: number }) => void) => {
+        onProgress?.({ frameIndex: 1, totalSoFar: 1 });
+        return [det("0")];
+      },
+    );
+    const { deps, persisted } = harness({
+      prompts: ["pole", "tower"],
+      trackPrompt,
+      now: () => (t += 1000),
+      budgetMs: 1500,
+    });
+    const out = await runTrackPrompts(deps);
+    // Budget blows mid-first-prompt: nothing completed, nothing persisted.
+    expect(out.status).toBe("timeout");
+    expect(out.completedPrompts).toBe(0);
+    expect(out.objects).toEqual([]);
+    expect(persisted).toHaveLength(0);
+  });
+
+  it("maps an aborted provider request to disconnected with partials kept", async () => {
+    const abort = Object.assign(new Error("This operation was aborted"), { name: "AbortError" });
+    let calls = 0;
+    const trackPrompt = vi.fn(async () => {
+      calls++;
+      if (calls === 1) return [det("0")];
+      throw abort;
+    });
+    const { deps, persisted } = harness({ prompts: ["pole", "tower"], trackPrompt });
+    const out = await runTrackPrompts(deps);
+    expect(out.status).toBe("disconnected");
+    expect(out.completedPrompts).toBe(1);
+    expect(out.objects).toHaveLength(1);
+    expect(persisted).toHaveLength(1);
   });
 });
