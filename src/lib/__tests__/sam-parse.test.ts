@@ -1,9 +1,14 @@
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   buildTrackedObjects,
+  createSamStream,
+  flushSamStream,
   iou,
   mergeAndDedupe,
   parseSamLine,
+  pushSamDelta,
+  type ParsedFrameLine,
 } from "../sam";
 
 // Real wire samples (Meta docs: /docs/sam/reading-segmentation).
@@ -122,5 +127,54 @@ describe("mergeAndDedupe", () => {
     ]);
     const ids = merged.map((o) => o.id).sort();
     expect(ids).toEqual(["a", "c"]);
+  });
+});
+
+describe("SamStream accumulation (split-record fix)", () => {
+  it("(a) a record split across 3 deltas parses exactly once", () => {
+    const cuts = [20, 80];
+    const parts = [
+      LINE_TWO.slice(0, cuts[0]),
+      LINE_TWO.slice(cuts[0], cuts[1]),
+      `${LINE_TWO.slice(cuts[1])}\n`,
+    ];
+    const s = createSamStream();
+    const out: ParsedFrameLine[] = [];
+    for (const p of parts) out.push(...pushSamDelta(s, p));
+    expect(out).toHaveLength(1);
+    expect(out[0].frameIndex).toBe(12);
+    expect(out[0].detections).toHaveLength(2);
+    expect(flushSamStream(s)).toEqual([]);
+  });
+
+  it("(b) two records in one delta parse twice, remainder carries over", () => {
+    const s = createSamStream();
+    const out = pushSamDelta(s, `${LINE_TWO}\n${LINE_SPARSE.slice(0, 10)}`);
+    expect(out).toHaveLength(1);
+    expect(out[0].frameIndex).toBe(12);
+    out.push(...pushSamDelta(s, `${LINE_SPARSE.slice(10)}\n`));
+    expect(out).toHaveLength(2);
+    expect(out[1].detections.map((d) => d.objectId)).toEqual(["0", "2"]);
+  });
+
+  it("(c) committed live sample parses identically whole vs chunked", () => {
+    // Needs src/lib/__tests__/fixtures/sam-live.txt — ONE real SAM response.
+    // Capture: npx tsx scripts/capture-sam-sample.ts <file_id> "<prompt>".
+    // No fixture (no video, no burn) → skipped, never faked.
+    const livePath = new URL("./fixtures/sam-live.txt", import.meta.url);
+    if (!existsSync(livePath)) {
+      console.warn("SKIP (c): no live SAM fixture — run scripts/capture-sam-sample.ts to capture one.");
+      return;
+    }
+    const raw = readFileSync(livePath, "utf8");
+    const whole = raw.split("\n").map((l) => parseSamLine(l)).filter((p) => p !== null);
+    const s = createSamStream();
+    const chunked: ParsedFrameLine[] = [];
+    for (let i = 0; i < raw.length; i += 7) {
+      chunked.push(...pushSamDelta(s, raw.slice(i, i + 7)));
+    }
+    chunked.push(...flushSamStream(s));
+    expect(whole.length).toBeGreaterThan(0);
+    expect(chunked).toEqual(whole);
   });
 });

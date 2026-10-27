@@ -1,4 +1,5 @@
 import { getMetaClient } from "./meta-client";
+import { SAM_MODEL } from "./models";
 import type { BoundingBox, TrackedFrame, TrackedObject } from "./types";
 
 // Contract: SAM 3.1 helpers (PRD §6.2).
@@ -58,6 +59,43 @@ export function parseSamLine(line: string): ParsedFrameLine | null {
     }
   }
   return { frameIndex, detections };
+}
+
+// ============ SSE stream accumulation (P1: split-record fix) ============
+// Text deltas are token-sized, so one <Nf>... record can straddle events and two
+// records can share one event. The accumulator keeps the remainder and yields
+// only complete lines — feed every delta, drain at stream end. Pure + offline.
+export interface SamStreamState {
+  buffer: string;
+}
+
+export function createSamStream(): SamStreamState {
+  return { buffer: "" };
+}
+
+// Pushes one text delta, returns newly-completed parsed frames (possibly zero).
+export function pushSamDelta(state: SamStreamState, delta: string): ParsedFrameLine[] {
+  state.buffer += delta;
+  const out: ParsedFrameLine[] = [];
+  let idx: number;
+  while ((idx = state.buffer.indexOf("\n")) >= 0) {
+    const line = state.buffer.slice(0, idx);
+    state.buffer = state.buffer.slice(idx + 1);
+    const parsed = parseSamLine(line); // trims, so \r\n is safe
+    if (parsed) out.push(parsed);
+  }
+  return out;
+}
+
+// Drains a final unterminated line at stream end. Empty remainder → [].
+export function flushSamStream(state: SamStreamState): ParsedFrameLine[] {
+  if (!state.buffer.trim()) {
+    state.buffer = "";
+    return [];
+  }
+  const parsed = parseSamLine(state.buffer);
+  state.buffer = "";
+  return parsed ? [parsed] : [];
 }
 
 // ============ IoU + dedupe ============
@@ -223,7 +261,7 @@ export async function trackPrompt(
   const collected: { frameIndex: number; detections: RawDetection[] }[] = [];
   await withRetry(async () => {
     const stream = await client.responses.create({
-      model: "sam-3.1",
+      model: SAM_MODEL,
       stream: true,
       input: [
         {
@@ -236,19 +274,21 @@ export async function trackPrompt(
         },
       ],
     } as never);
+    // Accumulate deltas: one record can straddle events (P1 split-record fix).
+    const acc = createSamStream();
+    const emit = (parsed: { frameIndex: number; detections: RawDetection[] }) => {
+      collected.push(parsed);
+      onProgress?.({
+        frameIndex: parsed.frameIndex,
+        totalSoFar: collected.length,
+      });
+    };
     for await (const event of stream as unknown as AsyncIterable<unknown>) {
       const text = extractTextDelta(event);
       if (!text) continue;
-      for (const line of text.split("\n")) {
-        const parsed = parseSamLine(line);
-        if (!parsed) continue;
-        collected.push(parsed);
-        onProgress?.({
-          frameIndex: parsed.frameIndex,
-          totalSoFar: collected.length,
-        });
-      }
+      for (const parsed of pushSamDelta(acc, text)) emit(parsed);
     }
+    for (const parsed of flushSamStream(acc)) emit(parsed);
   });
   return collected;
 }
