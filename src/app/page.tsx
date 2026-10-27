@@ -16,6 +16,7 @@ import {
 import TrackingViewport from "@/components/TrackingViewport";
 import UploadZone, { type UploadForm } from "@/components/UploadZone";
 import { stashVideoFile } from "@/lib/client-video";
+import { ASR_MODEL, IMAGE_MODEL, SAM_MODEL, SPARK_MODEL } from "@/lib/models";
 
 const PIPELINE = [
   { icon: Upload, name: "Drop footage", desc: "Drone MP4, straight from the flight." },
@@ -26,10 +27,10 @@ const PIPELINE = [
 ];
 
 const MODELS = [
-  { id: "sam-3.1", role: "Eyes", desc: "Object Multiplex tracks 40+ grid assets simultaneously — one pass, ~7× the speed of solo tracking." },
-  { id: "muse-voice-transcribe-1.0", role: "Ears", desc: "Diarized transcription turns drive-back voice memos into timestamped evidence." },
-  { id: "muse-spark-1.3", role: "Analyst", desc: "Aligns notes to assets, then writes the severity-ranked defect report as structured JSON." },
-  { id: "muse-image-1.0", role: "Marker", desc: "Renders annotated before/after visuals with severity overlays on defect frames." },
+  { id: SAM_MODEL, role: "Eyes", desc: "Object Multiplex tracks 40+ grid assets simultaneously — one pass, ~7× the speed of solo tracking." },
+  { id: ASR_MODEL, role: "Ears", desc: "Diarized transcription turns drive-back voice memos into timestamped evidence." },
+  { id: SPARK_MODEL, role: "Analyst", desc: "Aligns notes to assets, then writes the severity-ranked defect report as structured JSON." },
+  { id: IMAGE_MODEL, role: "Marker", desc: "Deterministic overlays pin each defect to its tracked box on the real key frame — no painted damage." },
   { id: "files-api", role: "Loader", desc: "Pre-uploads footage so every model call references one file_id." },
 ];
 

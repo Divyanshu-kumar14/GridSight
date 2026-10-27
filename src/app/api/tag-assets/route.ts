@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getMetaClient } from "@/lib/meta-client";
+import { SPARK_MODEL } from "@/lib/models";
 import {
   TAGGING_SYSTEM_PROMPT,
   buildTaggingPayload,
@@ -79,7 +80,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const client = getMetaClient();
     const res = await client.chat.completions.create({
-      model: "muse-spark-1.3",
+      model: SPARK_MODEL,
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [

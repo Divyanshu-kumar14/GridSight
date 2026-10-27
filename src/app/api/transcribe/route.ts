@@ -13,13 +13,14 @@ import {
 } from "@/lib/audio";
 import { ensureScratchDirs, getSession, scratchDir, setTranscript, updateSession } from "@/lib/store";
 import { demoTranscript } from "@/lib/demo-fixture";
+import { ASR_MODEL, ASR_TRANSCRIBE_PATH, META_BASE_URL } from "@/lib/models";
 
 // POST /api/transcribe — JSON {sessionId} (stored audio) or multipart {sessionId + audio}.
 // 200 {segments, totalDuration, speakerCount} · 400 validation · 404 no session/audio · 502 upstream.
 // USE_CACHED=true → offline fixture, zero Meta burn.
 const jsonSchema = z.object({ sessionId: z.string().min(1) });
 
-const TRANSCRIBE_URL = "https://api.meta.ai/v1/asr/transcribe";
+const TRANSCRIBE_URL = `${META_BASE_URL}${ASR_TRANSCRIBE_PATH}`;
 
 export async function POST(req: Request): Promise<NextResponse> {
   const contentType = req.headers.get("content-type") ?? "";
@@ -138,7 +139,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     const wavBytes = await readFile(wavPath);
     const form = new FormData();
     form.append("file", new Blob([new Uint8Array(wavBytes)], { type: "audio/wav" }), "voice.wav");
-    form.append("model", "muse-voice-transcribe-1.0");
+    form.append("model", ASR_MODEL);
     form.append("mode", "DIARIZATION");
     form.append("language", "en");
 

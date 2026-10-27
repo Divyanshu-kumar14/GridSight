@@ -4,6 +4,7 @@
 // Never prints the key or response bodies containing credentials.
 
 import { getMetaClient } from "../src/lib/meta-client";
+import { IMAGE_MODEL, SAM_MODEL, SPARK_MODEL } from "../src/lib/models";
 
 type Row = { endpoint: string; status: "PASS" | "FAIL" | "SKIP"; detail: string };
 
@@ -29,7 +30,7 @@ async function main(): Promise<void> {
   // 2. Muse Spark 1.3 — minimal chat completion.
   try {
     const res = await client.chat.completions.create({
-      model: "muse-spark-1.3",
+      model: SPARK_MODEL,
       messages: [{ role: "user", content: "Reply with exactly: ok" }],
       temperature: 0,
     });
@@ -43,7 +44,7 @@ async function main(): Promise<void> {
   // PASS = reachable (any non-401/403). FAIL = auth/network down.
   try {
     await client.responses.create({
-      model: "sam-3.1",
+      model: SAM_MODEL,
       stream: false,
       input: [{ role: "user", content: [{ type: "input_text", text: "insulator" }] }],
     } as never);
@@ -66,7 +67,7 @@ async function main(): Promise<void> {
   if (process.env.SMOKE_IMAGE === "1") {
     try {
       const img = await client.images.generate({
-        model: "muse-image-1.0",
+        model: IMAGE_MODEL,
         prompt: "tiny test square, solid gray",
         n: 1,
       } as never);
