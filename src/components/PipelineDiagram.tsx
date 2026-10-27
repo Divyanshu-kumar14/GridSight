@@ -134,14 +134,16 @@ export default function PipelineDiagram({ steps, className }: PipelineDiagramPro
               >
                 <animate
                   attributeName="r"
-                  values={`0;${HALO_R};0`}
+                  values={`0;0;${HALO_R};0`}
+                  keyTimes="0;0.9;0.95;1"
                   dur={PULSE_DUR}
                   begin={`${i * PULSE_STAGGER}s`}
                   repeatCount="indefinite"
                 />
                 <animate
                   attributeName="opacity"
-                  values="1;0"
+                  values="0;0;0.9;0"
+                  keyTimes="0;0.9;0.95;1"
                   dur={PULSE_DUR}
                   begin={`${i * PULSE_STAGGER}s`}
                   repeatCount="indefinite"
@@ -149,7 +151,10 @@ export default function PipelineDiagram({ steps, className }: PipelineDiagramPro
               </circle>
             ))}
         </svg>
-        <ol className="grid grid-cols-5 gap-4">
+        <ol
+          className="grid gap-4"
+          style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
+        >
           {steps.map((s, i) => (
             <li key={s.name} className="relative">
               <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-amber-500 bg-ink font-mono text-xs font-bold text-amber-400">
@@ -208,14 +213,16 @@ export default function PipelineDiagram({ steps, className }: PipelineDiagramPro
                       >
                         <animate
                           attributeName="r"
-                          values={`0;${HALO_R};0`}
+                          values={`0;0;${HALO_R};0`}
+                          keyTimes="0;0.9;0.95;1"
                           dur={PULSE_DUR}
                           begin={`${i * PULSE_STAGGER}s`}
                           repeatCount="indefinite"
                         />
                         <animate
                           attributeName="opacity"
-                          values="1;0"
+                          values="0;0;0.9;0"
+                          keyTimes="0;0.9;0.95;1"
                           dur={PULSE_DUR}
                           begin={`${i * PULSE_STAGGER}s`}
                           repeatCount="indefinite"
