@@ -7,6 +7,7 @@ import PipelineProgress, { type PipeStep } from "@/components/PipelineProgress";
 import Timeline from "@/components/Timeline";
 import TranscriptPanel from "@/components/TranscriptPanel";
 import VideoOverlayPlayer from "@/components/VideoOverlayPlayer";
+import WorkspaceSplit from "@/components/WorkspaceSplit";
 import { getVideoFile, stashVideoFile, videoObjectUrl } from "@/lib/client-video";
 import { TIMEOUTS, fetchWithTimeout } from "@/lib/net";
 import type { DefectReport, TaggedNote, TrackedObject, TranscriptSegment } from "@/lib/types";
@@ -378,13 +379,16 @@ export default function InspectionPage() {
           </div>
         )}
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
+        <WorkspaceSplit
+          left={
           <div>
             <VideoOverlayPlayer src={src} objects={objects} fps={fps} seekTo={seekTo} selectedId={selectedId} onTime={setCurrentTime} />
             <div className="mt-3">
               <Timeline objects={objects} duration={duration} currentTime={currentTime} onSeek={setSeekTo} />
             </div>
           </div>
+          }
+          right={
           <div className="space-y-3">
             <button
               onClick={startTracking}
@@ -470,7 +474,8 @@ export default function InspectionPage() {
               )}
             </div>
           </div>
-        </div>
+          }
+        />
       </div>
     </main>
   );

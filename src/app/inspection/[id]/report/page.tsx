@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import DefectCard from "@/components/DefectCard";
+import RawJsonPanel from "@/components/RawJsonPanel";
+import ReportBreadcrumb from "@/components/ReportBreadcrumb";
 import SeverityChart from "@/components/SeverityChart";
 import { buildReportCsv, reportCsvFilename } from "@/lib/export";
 import type { DefectReport } from "@/lib/types";
@@ -62,9 +64,7 @@ export default function ReportPage() {
   return (
     <main className="min-h-screen bg-ink px-4 py-6 text-slate-100">
       <div className="mx-auto max-w-3xl space-y-4">
-        <button onClick={() => router.push(`/inspection/${sessionId}`)} className="text-sm text-amber-400 underline">
-          ← Back to workspace
-        </button>
+        <ReportBreadcrumb sessionId={sessionId} substationName={report.inspection.substationName} current="REPORT" />
         <header className="panel p-4">
           <span className="micro-label">GridSight defect report</span>
           <h1 className="mt-1 text-2xl font-bold tracking-tight">{report.inspection.substationName}</h1>
@@ -96,6 +96,7 @@ export default function ReportPage() {
             onSeek={(t) => router.push(`/inspection/${sessionId}?t=${Math.floor(t)}`)}
           />
         ))}
+        <RawJsonPanel json={JSON.stringify(report, null, 2)} />
       </div>
     </main>
   );

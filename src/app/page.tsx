@@ -14,11 +14,13 @@ import {
   Zap,
 } from "lucide-react";
 import TrackingViewport from "@/components/TrackingViewport";
+import DotGridBackdrop from "@/components/DotGridBackdrop";
+import PipelineDiagram, { type PipelineDiagramStep } from "@/components/PipelineDiagram";
 import UploadZone, { type UploadForm } from "@/components/UploadZone";
 import { stashVideoFile } from "@/lib/client-video";
 import { ASR_MODEL, IMAGE_MODEL, SAM_MODEL, SPARK_MODEL } from "@/lib/models";
 
-const PIPELINE = [
+const PIPELINE: PipelineDiagramStep[] = [
   { icon: Upload, name: "Drop footage", desc: "Drone MP4, straight from the flight." },
   { icon: ScanLine, name: "Track everything", desc: "SAM 3.1 multiplex holds every asset, every frame." },
   { icon: Mic, name: "Dictate notes", desc: "Talk on the drive back. Diarized, timestamped." },
@@ -85,7 +87,9 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 lg:grid-cols-2 lg:pt-20">
+      <div className="relative">
+        <DotGridBackdrop />
+      <section className="relative z-10 mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 lg:grid-cols-2 lg:pt-20">
         <div style={{ animation: "gs-rise 0.9s cubic-bezier(0.16,1,0.3,1) both" }}>
           <h1 className="text-balance text-5xl font-bold leading-[1.04] tracking-tight sm:text-6xl">
             Every defect on the yard, tagged.
@@ -112,27 +116,14 @@ export default function Home() {
           <TrackingViewport />
         </div>
       </section>
+      </div>
 
       {/* Pipeline */}
       <section id="how" className="border-t" style={{ borderColor: "var(--line)" }}>
         <div className="mx-auto max-w-6xl px-4 py-14">
           <h2 className="text-3xl font-bold tracking-tight">From footage to work order</h2>
-          <div className="relative mt-10">
-            <div className="node-line absolute left-0 right-0 top-5 hidden md:block" aria-hidden />
-            <ol className="grid gap-8 md:grid-cols-5 md:gap-4">
-              {PIPELINE.map((s, i) => (
-                <li key={s.name} className="relative">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-amber-500 bg-ink font-mono text-xs font-bold text-amber-400">
-                    {i + 1}
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <s.icon className="h-4 w-4 text-slate-300" />
-                    <h3 className="text-sm font-bold">{s.name}</h3>
-                  </div>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{s.desc}</p>
-                </li>
-              ))}
-            </ol>
+          <div className="mt-10">
+            <PipelineDiagram steps={PIPELINE} />
           </div>
         </div>
       </section>
