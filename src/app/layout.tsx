@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const geistSans = localFont({
@@ -33,6 +34,19 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <Toaster
+          position="bottom-right"
+          theme="dark"
+          toastOptions={{
+            style: {
+              background: "#0B111D",
+              border: "1px solid rgba(148,163,184,0.16)",
+              color: "#e8edf5",
+              fontFamily: "var(--font-geist-mono)",
+              fontSize: "12px",
+            },
+          }}
+        />
       </body>
     </html>
   );

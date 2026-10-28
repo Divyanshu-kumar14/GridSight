@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 
 // Synthetic hero feed: substation sketch with severity-colored tracked boxes.
 // Labeled SAMPLE everywhere a visitor could mistake it for a live feed.
@@ -35,7 +36,12 @@ export default function HeroFeed() {
           {formatClock(t)} · F{Math.floor(t * 30)}
         </span>
       </div>
-      <div className="relative h-64 overflow-hidden bg-ink sm:h-80">
+      <motion.div
+        className="relative h-64 overflow-hidden bg-ink sm:h-80"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6 }}
+      >
         <svg className="absolute inset-0 h-full w-full" viewBox="0 0 400 260" fill="none" aria-hidden>
           {Array.from({ length: 15 }, (_, i) => (
             <path key={`v${i}`} d={`M${i * 28} 0 V260`} stroke="rgba(148,163,184,0.07)" strokeWidth="1" />
@@ -72,7 +78,7 @@ export default function HeroFeed() {
             </span>
           </div>
         ))}
-      </div>
+      </motion.div>
       <div className="flex items-center gap-2 border-t px-4 py-2" style={{ borderColor: "var(--line)" }}>
         <p className="font-mono text-[10px] tracking-wider text-slate-500">
           SYNTHETIC DEMONSTRATION — {BOXES.length} OBJECTS TRACKED

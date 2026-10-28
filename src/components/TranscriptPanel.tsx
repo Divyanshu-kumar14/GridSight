@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import * as ScrollArea from "@radix-ui/react-scroll-area";
 import { Mic, Pencil, Square } from "lucide-react";
 import type { TaggedNote, TranscriptSegment } from "@/lib/types";
 
@@ -134,7 +135,9 @@ export default function TranscriptPanel({
       )}
       {tagError && <p role="alert" className="mt-2 text-xs text-red-400">{tagError}</p>}
 
-      <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
+      <ScrollArea.Root className="mt-3 h-64">
+        <ScrollArea.Viewport className="h-full w-full">
+          <ul className="space-y-2 pr-3">
         {segments.length === 0 && (
           <li className="text-xs text-slate-500">
             No transcript yet — stage audio, then Transcribe. Clicking a timestamp seeks the video.
@@ -209,7 +212,17 @@ export default function TranscriptPanel({
             </p>
           </li>
         ))}
-      </ul>
+          </ul>
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar
+          className="flex w-1.5 touch-none select-none p-0.5"
+          orientation="vertical"
+        >
+          <ScrollArea.Thumb
+            className="relative flex-1 rounded-full bg-slate-700 hover:bg-slate-500 transition-colors"
+          />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
     </div>
   );
 }

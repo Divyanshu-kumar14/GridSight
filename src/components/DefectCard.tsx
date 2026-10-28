@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDown, Check, Mic, Minus } from "lucide-react";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import type { Defect } from "@/lib/types";
 
 // Contract: one severity-ranked defect with visuals, actions, and seek link.
@@ -80,7 +81,16 @@ export default function DefectCard({
   onSeek: (t: number) => void;
 }) {
   const box = isRenderableBox(defect.overlayBox) ? defect.overlayBox : null;
+  const evidenceReason =
+    defect.evidenceSource === "visual"
+      ? `Visual evidence from the tracked key frame${typeof defect.evidenceFrameIndex === "number" ? ` · F${defect.evidenceFrameIndex}` : ""}.`
+      : "Voice-only finding — no frame capture, inspector note only.";
+  const associationReason =
+    defect.assetAssociation === "unresolved"
+      ? "Asset association could not be confirmed — no bounding box borrowed from another asset."
+      : "Asset association confirmed against tracked IDs.";
   return (
+    <Tooltip.Provider delayDuration={200}>
     <article className="panel grid overflow-hidden sm:grid-cols-3">
       {/* Left third: evidence frame, or voice-only marker */}
       <div className="relative bg-black">
@@ -123,31 +133,64 @@ export default function DefectCard({
           <span className={`rounded px-2.5 py-1 font-mono text-sm font-bold text-slate-950 ${badge[defect.severity]}`}>
             {defect.severity}
           </span>
-          <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${evidenceBadge(defect)}`}>
-            {defect.evidenceSource === "visual"
-              ? `VISUAL${typeof defect.evidenceFrameIndex === "number" ? ` · F${defect.evidenceFrameIndex}` : ""}`
-              : "VOICE ONLY"}
-          </span>
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${evidenceBadge(defect)}`}>
+                {defect.evidenceSource === "visual"
+                  ? `VISUAL${typeof defect.evidenceFrameIndex === "number" ? ` · F${defect.evidenceFrameIndex}` : ""}`
+                  : "VOICE ONLY"}
+              </span>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                className="z-50 max-w-xs rounded-md border border-line bg-panel px-2.5 py-1.5 font-mono text-[11px] text-slate-200 shadow-xl"
+                sideOffset={4}
+              >
+                {evidenceReason}
+                <Tooltip.Arrow className="fill-panel" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
           {defect.verification && (
-            <span
-              title={defect.verification.reason}
-              className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${verifyBadge[defect.verification.verdict] ?? verifyBadge.skipped}`}
-            >
-              <VerifyIcon verdict={defect.verification.verdict} />
-              {verifyLabel[defect.verification.verdict] ?? defect.verification.verdict.toUpperCase()}
-            </span>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <span
+                  className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${verifyBadge[defect.verification.verdict] ?? verifyBadge.skipped}`}
+                >
+                  <VerifyIcon verdict={defect.verification.verdict} />
+                  {verifyLabel[defect.verification.verdict] ?? defect.verification.verdict.toUpperCase()}
+                </span>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="z-50 max-w-xs rounded-md border border-line bg-panel px-2.5 py-1.5 font-mono text-[11px] text-slate-200 shadow-xl"
+                  sideOffset={4}
+                >
+                  {defect.verification.reason}
+                  <Tooltip.Arrow className="fill-panel" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
           )}
           {defect.assetAssociation && (
-            <span
-              title={
-                defect.assetAssociation === "unresolved"
-                  ? "Asset association could not be confirmed — no bounding box borrowed from another asset."
-                  : "Asset association confirmed against tracked IDs."
-              }
-              className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${associationBadge(defect)}`}
-            >
-              {defect.assetAssociation === "unresolved" ? "ASSET UNCONFIRMED" : "ASSET CONFIRMED"}
-            </span>
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <span
+                  className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${associationBadge(defect)}`}
+                >
+                  {defect.assetAssociation === "unresolved" ? "ASSET UNCONFIRMED" : "ASSET CONFIRMED"}
+                </span>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="z-50 max-w-xs rounded-md border border-line bg-panel px-2.5 py-1.5 font-mono text-[11px] text-slate-200 shadow-xl"
+                  sideOffset={4}
+                >
+                  {associationReason}
+                  <Tooltip.Arrow className="fill-panel" />
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
           )}
         </div>
         <h3 className="mt-2 text-base font-bold tracking-tight text-slate-100">{defect.title}</h3>
@@ -175,6 +218,7 @@ export default function DefectCard({
         </div>
       </div>
     </article>
+    </Tooltip.Provider>
   );
 }
 

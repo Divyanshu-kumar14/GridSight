@@ -15,6 +15,7 @@ import HeroFeed from "@/components/HeroFeed";
 import DotGridBackdrop from "@/components/DotGridBackdrop";
 import PipelineDiagram, { type PipelineDiagramStep } from "@/components/PipelineDiagram";
 import UploadZone, { type UploadForm } from "@/components/UploadZone";
+import PipelineProgress from "@/components/PipelineProgress";
 import { stashVideoFile } from "@/lib/client-video";
 import { ASR_MODEL, SAM_MODEL, SPARK_MODEL } from "@/lib/models";
 
@@ -38,24 +39,15 @@ export default function Home() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
 
-  const submit = async (form: UploadForm) => {
+  const submit = async (form: UploadForm, upload: { sessionId: string }) => {
     setBusy(true);
     setError(null);
     try {
-      const fd = new FormData();
-      fd.append("video", form.video);
-      if (form.audio) fd.append("audio", form.audio);
-      fd.append("substationName", form.substationName);
-      fd.append("inspectorName", form.inspectorName);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(json?.error?.message ?? `Upload failed (${res.status}).`);
-      }
-      stashVideoFile(json.sessionId, form.video);
+      stashVideoFile(upload.sessionId, form.video);
       router.push(
-        `/inspection/${json.sessionId}?prompts=${encodeURIComponent(form.prompts.join(","))}`,
+        `/inspection/${upload.sessionId}?prompts=${encodeURIComponent(form.prompts.join(","))}`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
@@ -177,8 +169,22 @@ export default function Home() {
         <div className="mx-auto max-w-3xl px-4 py-14">
           <h2 className="text-3xl font-bold tracking-tight">Run an inspection</h2>
           <p className="mt-2 text-sm text-slate-500">MP4/MOV up to 500MB · voice memo optional · 1–3 minute clips demo best</p>
+          {uploadPct !== null && (
+            <div className="mt-4">
+              <PipelineProgress
+                steps={[
+                  {
+                    key: "upload",
+                    label: uploadPct >= 100 ? "UPLOAD" : `UPLOAD ${uploadPct}%`,
+                    status: uploadPct >= 100 ? "complete" : "running",
+                  },
+                  { key: "track", label: "TRACK", status: "pending" },
+                ]}
+              />
+            </div>
+          )}
           <div className="mt-6">
-            <UploadZone onSubmit={submit} busy={busy} error={error} />
+            <UploadZone onSubmit={submit} busy={busy} error={error} onUploadProgress={setUploadPct} />
           </div>
         </div>
       </section>

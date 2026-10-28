@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { Zap } from "lucide-react";
 import DefectCard from "@/components/DefectCard";
 import RawJsonPanel from "@/components/RawJsonPanel";
@@ -132,13 +133,21 @@ export default function ReportPage() {
             </button>
           </div>
         </header>
-        {report.defects.map((d) => (
-          <DefectCard
-            key={d.id}
-            defect={d}
-            onSeek={(t) => router.push(`/inspection/${sessionId}?t=${Math.floor(t)}`)}
-          />
-        ))}
+        <AnimatePresence>
+          {report.defects.map((d, i) => (
+            <motion.div
+              key={d.id ?? i}
+              initial={{ opacity: 0, x: -12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.25, delay: i * 0.06 }}
+            >
+              <DefectCard
+                defect={d}
+                onSeek={(t) => router.push(`/inspection/${sessionId}?t=${Math.floor(t)}`)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
         <RawJsonPanel json={JSON.stringify(report, null, 2)} />
       </div>
     </main>

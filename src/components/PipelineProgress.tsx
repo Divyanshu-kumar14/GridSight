@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Check, X } from "lucide-react";
 
 // Contract: 48px mission-control HUD bar bound to pipeline status.
@@ -25,7 +26,13 @@ export default function PipelineProgress({ steps }: { steps: PipeStep[] }) {
   return (
     <ol className="flex h-12 items-center gap-0 overflow-x-auto rounded-md border border-line bg-panel px-3" aria-label="Pipeline progress">
       {steps.map((s, i) => (
-        <li key={s.key} className="flex min-w-0 items-center">
+        <motion.li
+          key={s.key}
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.18, delay: i * 0.07 }}
+          className="flex min-w-0 items-center"
+        >
           {i > 0 && <span aria-hidden className="mx-2 h-px w-6 shrink-0 bg-slate-700 sm:w-10" />}
           <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[11px] font-bold tracking-wider ${chip[s.status]}`}>
             {s.status === "complete" && <Check className="h-3 w-3 text-green-400" strokeWidth={3} aria-hidden />}
@@ -35,7 +42,7 @@ export default function PipelineProgress({ steps }: { steps: PipeStep[] }) {
           {s.status === "error" && s.error && (
             <span role="alert" className="ml-1 truncate text-xs text-red-400">({s.error})</span>
           )}
-        </li>
+        </motion.li>
       ))}
     </ol>
   );

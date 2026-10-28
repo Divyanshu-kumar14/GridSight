@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import * as Tabs from "@radix-ui/react-tabs";
+import { toast } from "sonner";
 import AssetList from "@/components/AssetList";
 import PipelineProgress, { type PipeStep } from "@/components/PipelineProgress";
 import Timeline from "@/components/Timeline";
@@ -123,10 +125,10 @@ export default function InspectionPage() {
   }, [objects]);
 
   const steps: PipeStep[] = [
-    { key: "upload", label: "Upload", status: "complete" },
+    { key: "upload", label: "UPLOAD", status: "complete" },
     {
       key: "track",
-      label: tracking === "running" ? `Tracking ${progress}%` : "Tracking",
+      label: tracking === "running" ? `TRACK ${progress}%` : "TRACK",
       status: tracking === "idle" ? "pending" : tracking === "running" ? "running" : tracking === "done" ? "complete" : "error",
       error: tracking === "error" ? (error ?? "failed") : undefined,
     },
@@ -188,6 +190,7 @@ export default function InspectionPage() {
               setObjects(objs);
               setProgress(100);
               setTracking("done");
+              toast.success(`Tracking complete — ${objs.length} assets detected`);
               void fetchThumbs(objs);
             } else if (evt.type === "cancelled") {
               setTracking("idle");
@@ -210,7 +213,9 @@ export default function InspectionPage() {
         setError(null);
         void refreshPersisted("abort");
       } else {
-        setError(err instanceof Error ? err.message : "Tracking failed.");
+        const msg = err instanceof Error ? err.message : "Tracking failed.";
+        setError(msg);
+        toast.error(msg);
         setTracking("error");
         void refreshPersisted("error");
       }
@@ -253,8 +258,11 @@ export default function InspectionPage() {
       }
       setSegments(Array.isArray(json?.segments) ? json.segments : []);
       setTranscribing("done");
+      toast.success("Transcript ready");
     } catch (err) {
-      setTranscribeError(err instanceof Error ? err.message : "Transcription failed.");
+      const msg = err instanceof Error ? err.message : "Transcription failed.";
+      setTranscribeError(msg);
+      toast.error(msg);
       setTranscribing("error");
     }
   };
@@ -278,8 +286,11 @@ export default function InspectionPage() {
       setTagged(map);
       setTagFallback(json?.fallback === true);
       setTagging("done");
+      toast.success(`${notes.length} segments tagged`);
     } catch (err) {
-      setTagError(err instanceof Error ? err.message : "Tagging failed.");
+      const msg = err instanceof Error ? err.message : "Tagging failed.";
+      setTagError(msg);
+      toast.error(msg);
       setTagging("error");
     }
   };
@@ -326,8 +337,10 @@ export default function InspectionPage() {
             } else if (evt.type === "defect_found") {
               setReportFound((n) => n + 1);
             } else if (evt.type === "report_complete") {
-              setReport((d?.report as DefectReport) ?? null);
+              const rep = (d?.report as DefectReport) ?? null;
+              setReport(rep);
               setReporting("done");
+              toast.success(`Report ready — ${rep?.defects?.length ?? reportFound} defect(s) found`);
             } else if (evt.type === "cancelled") {
               setReporting("idle");
               setReportError("Report cancelled.");
@@ -344,7 +357,9 @@ export default function InspectionPage() {
         setReporting("idle");
         setReportError("Report cancelled.");
       } else {
-        setReportError(err instanceof Error ? err.message : "Report generation failed.");
+        const msg = err instanceof Error ? err.message : "Report generation failed.";
+        setReportError(msg);
+        toast.error(msg);
         setReporting("error");
       }
     } finally {
@@ -452,30 +467,25 @@ export default function InspectionPage() {
               </button>
             )}
             <div className="panel overflow-hidden">
-              <div role="tablist" aria-label="Workspace panels" className="flex border-b border-line">
-                {(
-                  [
-                    { key: "assets", label: "ASSETS" },
-                    { key: "transcript", label: "TRANSCRIPT" },
-                    { key: "report", label: "REPORT" },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.key}
-                    role="tab"
-                    aria-selected={tab === t.key}
-                    onClick={() => setTab(t.key)}
-                    className={`flex-1 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors ${tab === t.key ? "bg-amber-500 text-slate-950" : "text-slate-400 hover:text-white"}`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <div className="[&>*]:!border-0 [&>*]:!rounded-none">
-                {tab === "assets" && (
+              <Tabs.Root defaultValue="assets" value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+                <Tabs.List
+                  className="flex border-b border-line"
+                  aria-label="Workspace panels"
+                >
+                  {["assets", "transcript", "report"].map((key) => (
+                    <Tabs.Trigger
+                      key={key}
+                      value={key}
+                      className="flex-1 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950"
+                    >
+                      {key}
+                    </Tabs.Trigger>
+                  ))}
+                </Tabs.List>
+                <Tabs.Content value="assets">
                   <AssetList objects={objects} selectedId={selectedId} thumbs={thumbs} onSelect={seekToObject} />
-                )}
-                {tab === "transcript" && (
+                </Tabs.Content>
+                <Tabs.Content value="transcript">
                   <TranscriptPanel
                     segments={segments}
                     busy={transcribing === "running"}
@@ -491,8 +501,8 @@ export default function InspectionPage() {
                     onAssetClick={highlightAsset}
                     onEditSegment={editSegment}
                   />
-                )}
-                {tab === "report" && (
+                </Tabs.Content>
+                <Tabs.Content value="report">
                   <div className="p-4">
                     <button
                       onClick={generateReport}
@@ -542,8 +552,8 @@ export default function InspectionPage() {
                       )
                     )}
                   </div>
-                )}
-              </div>
+                </Tabs.Content>
+              </Tabs.Root>
             </div>
           </div>
           }

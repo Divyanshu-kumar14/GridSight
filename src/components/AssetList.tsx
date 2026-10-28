@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import * as ScrollArea from "@radix-ui/react-scroll-area";
+import * as Select from "@radix-ui/react-select";
+import { motion } from "framer-motion";
+import { Check, ChevronDown } from "lucide-react";
 import type { TrackedObject } from "@/lib/types";
 
 // Contract: filterable tracked-object list. Click → onSelect(id) for seek/highlight.
@@ -42,21 +46,48 @@ export default function AssetList({
     <div className="panel p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-sm font-semibold text-slate-200">Assets ({visible.length})</span>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="ml-auto rounded-md border border-line bg-ink px-2 py-1 text-xs text-slate-200"
-          aria-label="Filter by category"
-        >
-          <option value="all">all</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <Select.Root value={filter} onValueChange={setFilter}>
+          <Select.Trigger
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-line bg-ink px-2 py-1 text-xs text-slate-200 hover:border-slate-500 data-[placeholder]:text-slate-400"
+            aria-label="Filter by category"
+          >
+            <Select.Value />
+            <Select.Icon><ChevronDown className="h-3 w-3" /></Select.Icon>
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Content
+              className="overflow-hidden rounded-md border border-line bg-panel shadow-xl z-50"
+              position="popper"
+              sideOffset={4}
+            >
+              <Select.Viewport className="p-1">
+                {["all", ...categories].map((c) => (
+                  <Select.Item
+                    key={c}
+                    value={c}
+                    className="relative flex cursor-pointer select-none items-center rounded px-6 py-1.5 text-xs text-slate-200 outline-none data-[highlighted]:bg-amber-500/10 data-[highlighted]:text-amber-300"
+                  >
+                    <Select.ItemText>{c}</Select.ItemText>
+                    <Select.ItemIndicator className="absolute left-1.5">
+                      <Check className="h-3 w-3 text-amber-400" />
+                    </Select.ItemIndicator>
+                  </Select.Item>
+                ))}
+              </Select.Viewport>
+            </Select.Content>
+          </Select.Portal>
+        </Select.Root>
       </div>
-      <ul className="grid max-h-80 grid-cols-2 gap-2 overflow-y-auto">
-        {visible.map((o) => (
-          <li key={o.id}>
+      <ScrollArea.Root className="max-h-80">
+        <ScrollArea.Viewport className="h-full w-full">
+          <ul className="grid grid-cols-2 gap-2 pr-3">
+        {visible.map((o, index) => (
+          <motion.li
+            key={o.id}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: index * 0.04 }}
+          >
             <button
               onClick={() => onSelect(o.id)}
               className={`h-full w-full rounded-md border border-line bg-ink p-2 text-left text-xs transition-colors hover:border-slate-500 ${selectedId === o.id ? "border-amber-500" : ""}`}
@@ -76,9 +107,19 @@ export default function AssetList({
                 <span className="ml-2 shrink-0 font-mono text-slate-500">{o.totalFrameCount}f</span>
               </span>
             </button>
-          </li>
+          </motion.li>
         ))}
-      </ul>
+          </ul>
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar
+          className="flex w-1.5 touch-none select-none p-0.5"
+          orientation="vertical"
+        >
+          <ScrollArea.Thumb
+            className="relative flex-1 rounded-full bg-slate-700 hover:bg-slate-500 transition-colors"
+          />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
     </div>
   );
 }
