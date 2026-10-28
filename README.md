@@ -22,17 +22,26 @@ No API key, no network calls, no quota:
 
 ```bash
 npm install
-USE_CACHED=true npm run dev   # http://localhost:3000
+npm run dev   # http://localhost:3000 → Open sample report
 ```
 
-Open the app, upload any MP4, and run the full loop: Upload → Track → Transcribe → Tag assets → Generate Report. With cached fixtures the pipeline returns the frozen demo session. For live inference, set `MODEL_API_KEY` in `.env.local` instead.
+Click **Open sample report** (Explore a sample inspection). It calls `POST /api/demo-session`
+— a validated endpoint that builds a fresh session from frozen fixtures with zero inference —
+and opens a complete sample report clearly marked **SAMPLE / CACHED** (not from your video,
+no playable video). For live inference, set `MODEL_API_KEY` in `.env.local` and use
+**Start a new (live) inspection** instead. Full guide: `docs/SETUP.md`.
 
 ## Features
 
+- **Sample in one click, live when ready** — homepage offers Explore sample (no key, no upload, `POST /api/demo-session`) vs Start live (MP4/MOV + optional voice, presets, advanced prompts). Sample vs live is always labelled; live failures never fall back to canned output.
+- **Guided inspection run** — workspace **Run inspection** executes Track → Transcribe (skipped cleanly with no audio) → Match notes → Report + AI re-check in order, reusing completed billable stages, preserving partials, with per-stage Retry/Cancel and refresh recovery. Manual stage buttons remain.
 - **Track every asset in one pass** — SAM 3.1 multiplex segmentation with native-frame timestamps; per-prompt results persist incrementally so a late failure never wipes earlier prompts (`src/lib/track-run.ts`).
-- **Dictate instead of typing** — in-browser recording or audio upload, diarized into timestamped transcript segments.
+- **Dictate instead of typing** — in-browser recording or audio upload, diarized into timestamped transcript segments. Video-only workflows skip transcription + tagging honestly.
 - **Notes pinned to assets, not timestamps** — each voice note links to the tracked object visible when it was spoken.
-- **Reports that cite evidence** — every defect carries a frame citation and a verification verdict (`keep` / `downgrade` / `drop` / `skipped`); the server rebuilds inspection statistics itself instead of trusting model JSON.
+- **Reports that cite evidence** — every defect carries a frame citation, AI re-check status (`AI re-checked` / `Downgraded to voice-only` / `Rejected by AI review` / `Re-check unavailable`), and human-review status; the server rebuilds statistics + coverage itself instead of trusting model JSON.
+- **Honest coverage, no all-clear hype** — stable-track rate is labelled as such (not inspection coverage); the ledger shows assets represented vs not in key frames, skipped re-checks, unresolved links, and items needing review. Zero findings says “No defects were confirmed in the evidence reviewed — not proof the yard is defect-free.”
+- **Human review that sticks** — Confirm / Reject / Needs inspection + note + asset/description/action corrections via validated `POST /api/report-review` (session-owned, unknown IDs rejected, verification untouched, survives refresh).
+- **Usable exports** — CSV (with evidence provenance) plus **Print / Save as PDF** (print CSS, evidence images + overlays, limitations, AI-support warning).
 - **Zero-hallucination default** — with no voice notes and no transcript, the model is instructed to return zero defects rather than invent damage.
 - **Honest benchmarks** — a real-image static benchmark that reports NOT EVALUATED instead of a fake score when no predictions are supplied, plus a committed cached run that scores (see [Evaluation](#evaluation)).
 
@@ -127,10 +136,14 @@ No predictions ship with the dataset by default, so visual accuracy reports UNAV
 |---|---|---|
 | Upload, track, transcribe, tag, report, CSV export | Working | `src/app/api/*`, exercised live and in tests |
 | SAM tracking on full-resolution footage | Working | 594-frame tower track in a recorded session |
-| Cached demo mode (`USE_CACHED=true`) | Frozen sample | `src/lib/demo-fixture.ts` — frozen fixtures, zero burn; showcases one VISUAL verified finding + one VOICE ONLY downgraded finding |
+| Sample inspection (`POST /api/demo-session` + `USE_CACHED=true`) | Frozen sample, labelled | `src/lib/demo-fixture.ts` + `fixtures/demo-session/` — zero burn; one VISUAL AI re-checked finding + one VOICE-ONLY downgraded finding; workspace + report show SAMPLE/CACHED banners |
+| Human review + persistence | Working | `POST /api/report-review`, `DefectCard` review controls, validated + tested |
+| Print / Save as PDF | Working (browser print) | `window.print()` + print CSS in `globals.css`; accurately labelled, not a direct PDF download |
+| Dashboard statuses | Working | Server state (sample/in-progress/failed/complete + review flags from evidenceCoverage) |
+| Local setup | Working | `docker-compose.yml` (persistent `gridsight-data` volume matching `store.ts`), `docs/SETUP.md` |
+| Honest coverage ledger | Working | `computeEvidenceCoverage` + `computeAssetReview` + `needsHumanReview` (tested in `trust.test.ts`) |
 | Benchmark detection scores | Measured on recorded outputs | `bench:real:scored` reports P=1.00 R=1.00 on the rust episode (12-frame cached run); `bench:real` without predictions stays NOT EVALUATED |
 | Synthetic benchmark (`bench`) | Working, limited | 8 pipeline-logic cases — evidence handling only, no images |
-| PDF export | Planned | CSV ships; PDF deferred |
 
 ## Quick start
 
@@ -145,10 +158,10 @@ npm run dev                  # http://localhost:3000
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server (`--port 3101` to pin a different port) |
-| `npm test` | Vitest suite — 301 tests, 23 files |
+| `npm test` | Vitest suite — 333 tests, 25 files |
 | `npx tsc --noEmit` | Typecheck |
 | `npm run lint` | Next.js ESLint |
-| `npm run build` | Production build (10 API routes + 4 pages) |
+| `npm run build` | Production build (12 API routes + 4 pages) |
 | `npm run eval:smoke` | Quota-free pipeline smoke test (11 checks) |
 
 Helper scripts (each burns quota unless noted):
@@ -191,41 +204,45 @@ Missing keys fail loudly at request time, never by silent fallback. Tracking (SA
 ```
 src/
   app/
-    page.tsx                 landing + upload
-    dashboard/               all inspections
-    inspection/[id]/         workspace (tracking, transcript, report)
-    inspection/[id]/report/  final report + CSV export
+    page.tsx                 landing + upload (sample vs live)
+    dashboard/               all inspections (honest statuses)
+    inspection/[id]/         workspace (guided run + manual stages)
+    inspection/[id]/report/  final report + CSV + Print/PDF + human review
     api/
       upload/ track/ transcribe/ tag-assets/
-      generate-report/ frames/ sessions/ jobs/ health/
+      generate-report/ report-review/ demo-session/
+      frames/ sessions/ jobs/ health/
   lib/
     sam.ts track-run.ts  SAM request shape, SSE parser, resumable prompt loop
     meta-client.ts models.ts  OpenAI SDK client, single source of model IDs
-    store.ts db.ts        SQLite persistence
+    store.ts db.ts        SQLite persistence (isSample-aware)
     jobs.ts               cancellable job engine + SSE progress
     frames.ts ffmpeg.ts   thumbnails, key frames, probing
     tagging.ts            voice-note → asset matching
-    report.ts verify.ts   prompts, evidence labeling, validation, audit pass
+    report.ts verify.ts   prompts, evidence labeling, validation, audit pass, coverage ledger
     export.ts net.ts audio.ts client-video.ts
-    demo-fixture.ts       frozen offline data (USE_CACHED=true)
+    demo-fixture.ts       frozen offline data (demo-session + USE_CACHED)
   components/  UploadZone, TrackingViewport, VideoOverlayPlayer,
-               TranscriptPanel, AssetList, Timeline, DefectCard,
-               SeverityChart, PipelineProgress
+               TranscriptPanel, AssetList, Timeline, DefectCard (AI + human review),
+               SeverityChart, PipelineProgress (Waiting/Running/Complete/Needs attention)
 fixtures/      eval/ (labels + recorded responses), benchmark/ (v1 synthetic, real-v1 static-image)
 scripts/       eval.ts, bench.ts, eval-smoke.ts, eval-to-predictions.ts, smoke-*.ts, cache-demo.ts
+docs/          SETUP.md (plain-English local setup)
 ```
 
 ## API sketch
 
 | Route | Method | Notes |
 |---|---|---|
-| `/api/upload` | POST | multipart video (+ optional audio); probes duration/fps |
+| `/api/upload` | POST | multipart video (+ optional audio); metadata optional (“Not provided”); probes duration/fps |
+| `/api/demo-session` | POST | validated sample session from frozen fixtures; zero inference; `{sample:true}` |
 | `/api/track` | POST | SSE stream; `{sessionId, prompts[]}`; cancellable, per-prompt persistence |
-| `/api/transcribe` | POST | multipart audio or `{sessionId}` |
-| `/api/tag-assets` | POST | `{sessionId}` → notes with `matchedAssetId` |
-| `/api/generate-report` | POST/GET | SSE stream / fetch saved report |
+| `/api/transcribe` | POST | multipart audio or `{sessionId}`; 404 no-audio = clean skip for video-only |
+| `/api/tag-assets` | POST | `{sessionId}` → notes with `matchedAssetId`; 400 no-transcript = clean skip |
+| `/api/generate-report` | POST/GET | SSE stream / fetch saved report; server-computed coverage ledger |
+| `/api/report-review` | POST | `{sessionId, defectId, status, note?, corrections?}`; session-owned, validated, verification untouched |
 | `/api/frames/[sessionId]/[name]` | GET | JPEG thumbnails + key frames |
-| `/api/sessions[?sessionId=]` | GET | list or single session meta |
+| `/api/sessions[?sessionId=]` | GET | list (with `isSample`) or single session + transcript/tagged/hasReport for resume |
 | `/api/jobs` | POST | `{action: "cancel", jobId}` |
 
 ## Deploy (Docker)
@@ -235,17 +252,24 @@ Serverless can't run this app (`ffmpeg`/`ffprobe` for probing and key frames, wr
 ```bash
 docker build -t gridsight .
 docker run -p 3000:3000 -e MODEL_API_KEY="$MODEL_API_KEY" gridsight
+# or (persistent storage + healthcheck + restart):
+docker compose up --build
 ```
+
+See `docs/SETUP.md` for ports, volumes (`gridsight-data` → `/tmp/opencode/gridsight`),
+backup/delete, and troubleshooting.
 
 `GET /api/health` returns `{ ok, ffmpeg, dbWritable, version }` with no auth and no secrets (also the container HEALTHCHECK).
 
 ## Known limits
 
-- Single-user, single-node: SQLite + local scratch dir, no auth.
-- The cached demo (`USE_CACHED=true`) is a frozen two-finding sample: one `VISUAL` verified finding (frame citation + tracked bbox + `keep`) and one `VOICE ONLY` downgraded finding. The `VISUAL` path on live footage needs a real run — freeze it with `scripts/cache-demo.ts` before recording.
-- Key frames are downscaled to 1280px (q≈4, ~40–150KB) before they are sent to Spark; full-resolution frames would blow the vision request budget.
+- Single-user, single-node: SQLite + local scratch dir, no auth. Human review records no reviewer identity (no auth) — only status/note/corrections + timestamp.
+- The sample (`POST /api/demo-session` or `USE_CACHED=true`) is a frozen two-finding sample: one `VISUAL` AI re-checked finding and one `VOICE ONLY` downgraded finding. No playable video. The `VISUAL` path on live footage needs a real run — freeze it with `scripts/cache-demo.ts` before recording.
+- Key frames are downscaled to 1280px (q≈4, ~40–150KB) before they are sent to Spark; full-resolution frames would blow the vision request budget. Only ≤8 key frames are reviewed per report — assets absent from those frames were not visually reviewed (shown as “not represented”).
+- “Stable-track rate” (≥3 observations) is not inspection coverage; “AI re-checked” is not ground truth or engineer approval. Zero findings never means the yard is defect-free.
 - Transcription needs staged audio (record in-browser or attach a file); visual findings still work without it, but note-only findings require a transcript.
 - Thumbnail/key-frame extraction needs `ffmpeg`; failures skip loudly per-asset without failing the batch.
+- No cross-flight asset re-identification: two inspections never claim the same physical asset without manual confirmation (Asset Condition Passport deferred).
 - Scene-level tracking prompts (e.g. "electrical substation") return whole-frame boxes — use object-level prompts ("insulator", "transformer tank") for usable tracks.
 - PDF export is deferred; CSV export ships (with `evidenceSource` + `observation` columns).
 

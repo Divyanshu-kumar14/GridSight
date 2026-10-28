@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ArrowDown, Check, Mic, Minus } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { motion } from "framer-motion";
@@ -59,10 +60,19 @@ const verifyBadge: Record<string, string> = {
 };
 
 const verifyLabel: Record<string, string> = {
-  keep: "VERIFIED",
-  downgrade: "DOWNGRADED",
-  skipped: "SKIPPED",
-  drop: "DROPPED",
+  keep: "AI RE-CHECKED",
+  downgrade: "DOWNGRADED TO VOICE-ONLY",
+  skipped: "RE-CHECK UNAVAILABLE",
+  drop: "REJECTED BY AI REVIEW",
+};
+
+const verifyExplain: Record<string, string> = {
+  keep: "AI re-checked the cited frame and accepted the visual claim. Not independent ground truth or engineer approval.",
+  downgrade:
+    "AI review could not confirm the visual claim — kept as a voice-only note, not visual evidence.",
+  skipped:
+    "AI re-check did not run or failed — finding kept unchanged. Absence of a re-check is not proof for or against the defect.",
+  drop: "AI review rejected the visual claim.",
 };
 
 const VerifyIcon = ({ verdict }: { verdict: string }) =>
@@ -77,9 +87,13 @@ const VerifyIcon = ({ verdict }: { verdict: string }) =>
 export default function DefectCard({
   defect,
   onSeek,
+  sessionId,
+  onReviewed,
 }: {
   defect: Defect;
   onSeek: (t: number) => void;
+  sessionId?: string;
+  onReviewed?: (next: Defect) => void;
 }) {
   const box = isRenderableBox(defect.overlayBox) ? defect.overlayBox : null;
   const evidenceReason =
@@ -181,7 +195,10 @@ export default function DefectCard({
                   className="z-50 max-w-xs rounded-md border border-line bg-panel px-2.5 py-1.5 font-mono text-[11px] text-slate-200 shadow-xl"
                   sideOffset={4}
                 >
-                  {defect.verification.reason}
+                  <span className="block text-slate-400">
+                    {verifyExplain[defect.verification.verdict] ?? ""}
+                  </span>
+                  <span className="mt-1 block">{defect.verification.reason}</span>
                   <Tooltip.Arrow className="fill-panel" />
                 </Tooltip.Content>
               </Tooltip.Portal>
@@ -231,9 +248,141 @@ export default function DefectCard({
             [view @ {fmtClock(defect.frameTimestamp)}]
           </button>
         </div>
+        {defect.humanReview && (
+          <p className="mt-2 rounded-md border border-sky-800 bg-sky-950/50 px-2 py-1.5 text-[11px] text-sky-200">
+            Reviewer: {defect.humanReview.status}
+            {defect.humanReview.note ? ` — ${defect.humanReview.note}` : ""}
+            {defect.humanReview.correctedAssetId ? ` · asset → ${defect.humanReview.correctedAssetId}` : ""}
+            <span className="block font-mono text-[10px] text-sky-300/70">{defect.humanReview.updatedAt}</span>
+          </p>
+        )}
+        {sessionId && (
+          <ReviewControls defect={defect} sessionId={sessionId} onReviewed={onReviewed} />
+        )}
       </div>
     </article>
     </Tooltip.Provider>
+  );
+}
+
+function ReviewControls({
+  defect,
+  sessionId,
+  onReviewed,
+}: {
+  defect: Defect;
+  sessionId: string;
+  onReviewed?: (next: Defect) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState(defect.humanReview?.note ?? "");
+  const [asset, setAsset] = useState(defect.humanReview?.correctedAssetId ?? "");
+  const [desc, setDesc] = useState(defect.humanReview?.correctedDescription ?? "");
+  const [action, setAction] = useState(defect.humanReview?.correctedAction ?? "");
+
+  const submit = async (status: "confirmed" | "rejected" | "needs-inspection") => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/report-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          defectId: defect.id,
+          status,
+          ...(note.trim() ? { note: note.trim() } : {}),
+          ...(asset.trim() ? { correctedAssetId: asset.trim() } : {}),
+          ...(desc.trim() ? { correctedDescription: desc.trim() } : {}),
+          ...(action.trim() ? { correctedAction: action.trim() } : {}),
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error?.message ?? `Review failed (${res.status}).`);
+      onReviewed?.(json.defect as Defect);
+      setOpen(false);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Review failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-md border border-line bg-ink p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="micro-label">Human review</span>
+        <span className="font-mono text-[10px] text-slate-500">
+          {defect.humanReview ? defect.humanReview.status : "unreviewed"} · distinct from AI re-check
+        </span>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="ml-auto font-mono text-[11px] text-amber-400 hover:underline"
+        >
+          {open ? "Close" : defect.humanReview ? "Update review" : "Review"}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <label className="block">
+            <span className="micro-label mb-1 block">Reviewer note (optional)</span>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. confirmed on site, rust visible at cap"
+              maxLength={2000}
+              className="w-full rounded-md border border-line bg-panel px-2 py-1.5 text-xs text-slate-200"
+            />
+          </label>
+          <label className="block">
+            <span className="micro-label mb-1 block">Corrected asset ID (optional)</span>
+            <input
+              value={asset}
+              onChange={(e) => setAsset(e.target.value)}
+              placeholder={defect.assetId}
+              maxLength={120}
+              className="w-full rounded-md border border-line bg-panel px-2 py-1.5 font-mono text-xs text-slate-200"
+            />
+          </label>
+          <label className="block">
+            <span className="micro-label mb-1 block">Corrected description (optional)</span>
+            <input
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder="Corrected finding text"
+              maxLength={5000}
+              className="w-full rounded-md border border-line bg-panel px-2 py-1.5 text-xs text-slate-200"
+            />
+          </label>
+          <label className="block">
+            <span className="micro-label mb-1 block">Corrected action (optional)</span>
+            <input
+              value={action}
+              onChange={(e) => setAction(e.target.value)}
+              placeholder="Corrected recommended action"
+              maxLength={2000}
+              className="w-full rounded-md border border-line bg-panel px-2 py-1.5 text-xs text-slate-200"
+            />
+          </label>
+          {err && <p role="alert" className="text-[11px] text-red-400">{err}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button disabled={busy} onClick={() => void submit("confirmed")} className="rounded bg-green-600 px-2.5 py-1 text-xs font-bold text-white disabled:opacity-40">
+              Confirm
+            </button>
+            <button disabled={busy} onClick={() => void submit("needs-inspection")} className="rounded bg-amber-500 px-2.5 py-1 text-xs font-bold text-slate-950 disabled:opacity-40">
+              Needs inspection
+            </button>
+            <button disabled={busy} onClick={() => void submit("rejected")} className="rounded border border-line px-2.5 py-1 text-xs font-semibold text-slate-300 disabled:opacity-40">
+              Reject
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500">Original AI fields + verification history stay intact for audit — review is stored separately.</p>
+        </div>
+      )}
+    </div>
   );
 }
 

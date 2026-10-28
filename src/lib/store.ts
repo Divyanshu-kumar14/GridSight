@@ -124,6 +124,7 @@ export interface SessionSummary {
   totalTracked: number;
   totalDefects: number;
   updatedAt: string;
+  isSample?: boolean;
 }
 
 // Dashboard feed: every session + rollup counts, newest first.
@@ -154,6 +155,7 @@ export function listSessions(): SessionSummary[] {
       totalTracked: r.tracked,
       totalDefects: r.defects,
       updatedAt: r.updated_at,
+      isSample: s?.isSample === true,
     };
   });
 }

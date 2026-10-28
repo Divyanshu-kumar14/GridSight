@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, getTracking, listSessions } from "@/lib/store";
+import { getReport, getSession, getTaggedNotes, getTracking, getTranscript, listSessions } from "@/lib/store";
 import { getJobs } from "@/lib/jobs";
 
 // GET /api/sessions → every inspection, newest first, with rollup counts.
@@ -18,9 +18,15 @@ export async function GET(req: Request): Promise<NextResponse> {
       );
     }
     const trackJob = getJobs(sessionId).find((j) => j.kind === "track") ?? null;
+    const transcript = getTranscript(sessionId);
+    const tagged = getTaggedNotes(sessionId);
+    const report = getReport(sessionId);
     return NextResponse.json({
       session: s,
       tracking: getTracking(sessionId),
+      transcript,
+      tagged,
+      hasReport: !!report,
       trackJob: trackJob
         ? { status: trackJob.status, error: trackJob.error, progress: trackJob.progress, total: trackJob.total }
         : null,

@@ -45,7 +45,10 @@ describe("demo fixtures", () => {
     expect(report.defects.map((d) => d.severity)).toEqual(
       sortDefects(report.defects).map((d) => d.severity),
     );
-    expect(report.statistics).toEqual(rollupStats(report.defects));
+    const { verification: _v, ...statsCore } = report.statistics;
+    void _v;
+    expect(statsCore).toEqual(rollupStats(report.defects));
+    expect(report.statistics.verification).toEqual({ kept: 1, downgraded: 1, dropped: 0, skipped: 0 });
     expect(report.inspection.totalAssetsTracked).toBe(objs.length);
   });
 

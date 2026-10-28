@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  AssetReviewStatus,
   Defect,
   DefectReport,
   EvidenceCoverage,
@@ -52,6 +53,18 @@ const defectSchema = z.object({
       reason: z.string().min(1),
     })
     .optional(),
+  // Human review (server-applied via report-review API; optional so old
+  // reports still parse). Never overwrites model fields.
+  humanReview: z
+    .object({
+      status: z.enum(["confirmed", "rejected", "needs-inspection"]),
+      note: z.string().max(2000).optional(),
+      correctedAssetId: z.string().min(1).max(120).optional(),
+      correctedDescription: z.string().min(1).max(5000).optional(),
+      correctedAction: z.string().min(1).max(2000).optional(),
+      updatedAt: z.string().min(1),
+    })
+    .optional(),
   overlayBox: z
     .object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() })
     .optional(),
@@ -84,6 +97,14 @@ const reportSchema = z.object({
     medium: z.number(),
     low: z.number(),
     byCategory: z.record(z.string(), z.number()),
+    verification: z
+      .object({
+        kept: z.number(),
+        downgraded: z.number(),
+        dropped: z.number(),
+        skipped: z.number(),
+      })
+      .optional(),
   }),
   // Coverage transparency (server-computed; optional so legacy reports parse).
   evidenceCoverage: z
@@ -93,6 +114,12 @@ const reportSchema = z.object({
       visualFindings: z.number().int().min(0),
       voiceOnlyFindings: z.number().int().min(0),
       verificationSkipped: z.number().int().min(0),
+      assetsNotRepresented: z.number().int().min(0).optional(),
+      verificationKept: z.number().int().min(0).optional(),
+      verificationDowngraded: z.number().int().min(0).optional(),
+      verificationDropped: z.number().int().min(0).optional(),
+      unresolvedAssociations: z.number().int().min(0).optional(),
+      needsReview: z.number().int().min(0).optional(),
     })
     .optional(),
   generatedAt: z.string(),
@@ -160,7 +187,11 @@ export function rollupStats(defects: Defect[]): ReportStatistics {
 }
 
 // Coverage = share of tracked objects with stable tracks (≥3 frames).
-// Documented approximation: no ground-truth asset count exists in a zero-shot demo.
+// HONEST LABEL: "stable-track rate" — NOT the share of equipment visually
+// inspected or proven defect-free. Tracking an asset across video does not
+// mean every frame was reviewed for every defect. The report UI must label
+// this as stable-track rate and show evidenceCoverage (assets actually
+// represented in the selected key frames) alongside it.
 export function coveragePercent(objects: TrackedObject[]): number {
   if (objects.length === 0) return 0;
   const stable = objects.filter((o) => o.totalFrameCount >= 3).length;
@@ -416,6 +447,8 @@ export function pickKeyTimestamps(objects: TrackedObject[], tagged: TaggedNote[]
 
 // Server-computed coverage ledger from actual pipeline data (never model counts).
 // frames: the exact ordered key frames sent to the model (post-extraction).
+// Extended breakdown fields are always populated for new reports; older stored
+// reports parse without them (optional) and the UI falls back with `?. ?? 0`.
 export function computeEvidenceCoverage(
   objects: TrackedObject[],
   frames: KeyFrame[],
@@ -439,13 +472,107 @@ export function computeEvidenceCoverage(
   }
   const list = Array.isArray(defects) ? defects : [];
   const visualFindings = list.filter((d) => d?.evidenceSource === "visual").length;
+  const verificationSkipped = list.filter(
+    (d) => d?.evidenceSource === "visual" && (!d?.verification || d.verification.verdict === "skipped"),
+  ).length;
+  const verificationKept = list.filter((d) => d?.verification?.verdict === "keep").length;
+  const verificationDowngraded = list.filter(
+    (d) => d?.verification?.verdict === "downgrade",
+  ).length;
+  const verificationDropped = list.filter((d) => d?.verification?.verdict === "drop").length;
+  const unresolvedAssociations = list.filter(
+    (d) => d?.assetAssociation === "unresolved",
+  ).length;
+  const needsReview = list.filter(needsHumanReview).length;
   return {
     totalAssetsTracked,
     assetsRepresented,
     visualFindings,
     voiceOnlyFindings: list.length - visualFindings,
-    verificationSkipped: list.filter(
-      (d) => d?.evidenceSource === "visual" && (!d?.verification || d.verification.verdict === "skipped"),
-    ).length,
+    verificationSkipped,
+    assetsNotRepresented: Math.max(0, totalAssetsTracked - assetsRepresented),
+    verificationKept,
+    verificationDowngraded,
+    verificationDropped,
+    unresolvedAssociations,
+    needsReview,
   };
+}
+
+// A finding needs human review when it is not yet confirmed/rejected by a
+// reviewer AND carries residual uncertainty: unresolved asset link, skipped
+// AI re-check, or a high-severity voice-only claim. Explicit
+// "needs-inspection" human reviews always count until resolved.
+export function needsHumanReview(d: Defect | null | undefined): boolean {
+  if (!d || typeof d !== "object") return false;
+  const hr = (d as Defect).humanReview;
+  if (hr?.status === "confirmed" || hr?.status === "rejected") return false;
+  if (hr?.status === "needs-inspection") return true;
+  if ((d as Defect).assetAssociation === "unresolved") return true;
+  const v = (d as Defect).verification?.verdict;
+  if ((d as Defect).evidenceSource === "visual" && (!v || v === "skipped")) return true;
+  if (
+    (d as Defect).evidenceSource !== "visual" &&
+    ((d as Defect).severity === "CRITICAL" || (d as Defect).severity === "HIGH")
+  )
+    return true;
+  return false;
+}
+
+// Per-asset review status for the evidence table. Pure + offline.
+export function computeAssetReview(
+  objects: TrackedObject[],
+  frames: KeyFrame[],
+  defects: Defect[],
+): AssetReviewStatus[] {
+  const stamps = Array.isArray(frames) ? frames.map((f) => f.timestamp) : [];
+  const list = Array.isArray(defects) ? defects : [];
+  const byAsset = new Map<string, Defect[]>();
+  for (const d of list) {
+    if (!d || typeof d.assetId !== "string") continue;
+    const arr = byAsset.get(d.assetId) ?? [];
+    arr.push(d);
+    byAsset.set(d.assetId, arr);
+  }
+  const out: AssetReviewStatus[] = [];
+  if (!Array.isArray(objects)) return out;
+  for (const o of objects) {
+    if (!o || typeof o.id !== "string") continue;
+    const obs = Array.isArray(o.frames) ? o.frames.length : 0;
+    const represented = Array.isArray(o.frames)
+      ? o.frames.some(
+          (f) =>
+            f &&
+            isValidTimestamp(f.timestamp) &&
+            isValidBbox(f.bbox) &&
+            stamps.some((s) => Math.abs((f.timestamp as number) - s) < 1e-6),
+        )
+      : false;
+    const findings = byAsset.get(o.id) ?? [];
+    const hasUnresolved = findings.some((d) => d.assetAssociation === "unresolved");
+    const hasSkipped = findings.some(
+      (d) => d.evidenceSource === "visual" && (!d.verification || d.verification.verdict === "skipped"),
+    );
+    const needs = findings.some(needsHumanReview) || (!represented && findings.length > 0);
+    const states: AssetReviewStatus["states"] = [];
+    states.push(represented ? "Evidence represented" : "Not represented in selected evidence");
+    if (findings.length > 0) {
+      states.push(hasSkipped ? "Verification skipped" : "Verification complete");
+    }
+    if (hasUnresolved) states.push("Unresolved asset association");
+    if (needs || findings.some((d) => d.humanReview?.status === "needs-inspection"))
+      states.push("Needs human review");
+    out.push({
+      assetId: o.id,
+      assetCategory: o.category ?? "unknown",
+      observationCount: obs,
+      representedInEvidence: represented,
+      findingCount: findings.length,
+      hasUnresolvedAssociation: hasUnresolved,
+      hasSkippedVerification: hasSkipped,
+      needsReview: needs,
+      states,
+    });
+  }
+  return out;
 }

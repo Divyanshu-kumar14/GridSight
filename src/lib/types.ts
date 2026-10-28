@@ -21,6 +21,9 @@ export interface InspectionSession {
   videoDurationSec: number;
   videoFps: number; // probed at upload via ffprobe; 30 when unknown
   voiceFileId?: string;
+  // True for validated demo/sample sessions created without live inference.
+  // Optional so older stored sessions still parse.
+  isSample?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,12 +98,57 @@ export interface DefectReport {
 
 // Server-computed coverage ledger for the 8-frame budget: distinguishes what was
 // actually shown to the report model from what was only heard in voice notes.
+// Extended fields are optional so older stored reports still parse — readers
+// must use `?. ?? 0`. assetsNotRepresented is derived (total - represented) but
+// stored explicitly so the UI never recomputes trust numbers client-side.
 export interface EvidenceCoverage {
   totalAssetsTracked: number;
   assetsRepresented: number; // distinct tracked assets with a selected key frame
   visualFindings: number; // defects with evidenceSource === "visual"
   voiceOnlyFindings: number; // defects sourced only from inspector notes
   verificationSkipped: number; // visual defects with no keep/downgrade/drop verdict
+  // Honest breakdown (server-computed, optional for backwards compat).
+  assetsNotRepresented?: number; // totalAssetsTracked - assetsRepresented
+  verificationKept?: number; // visual findings AI re-checked and kept
+  verificationDowngraded?: number; // downgraded to voice-only on re-check
+  verificationDropped?: number; // rejected by AI review (removed)
+  unresolvedAssociations?: number; // findings with assetAssociation === "unresolved"
+  needsReview?: number; // findings needing human review (unresolved/skipped/voice-only critical/high)
+}
+
+// Per-asset review status for the evidence table. Pure derivation from
+// tracking + key frames + defects — never model-generated.
+export type AssetReviewState =
+  | "Evidence represented"
+  | "Not represented in selected evidence"
+  | "Verification complete"
+  | "Verification skipped"
+  | "Unresolved asset association"
+  | "Needs human review";
+
+export interface AssetReviewStatus {
+  assetId: string;
+  assetCategory: string;
+  observationCount: number;
+  representedInEvidence: boolean;
+  findingCount: number;
+  hasUnresolvedAssociation: boolean;
+  hasSkippedVerification: boolean;
+  needsReview: boolean;
+  states: AssetReviewState[];
+}
+
+// Human review of a single finding. Stored on the defect, distinct from the
+// model's verification verdict. status absent/“unreviewed” = no human action yet.
+export type HumanReviewStatus = "confirmed" | "rejected" | "needs-inspection" | "unreviewed";
+
+export interface HumanReview {
+  status: Exclude<HumanReviewStatus, "unreviewed">;
+  note?: string;
+  correctedAssetId?: string;
+  correctedDescription?: string;
+  correctedAction?: string;
+  updatedAt: string;
 }
 
 export interface InspectionMetadata {
@@ -141,6 +189,10 @@ export interface Defect {
     verdict: "keep" | "downgrade" | "drop" | "skipped";
     reason: string;
   };
+  // Human review (see report-review API): reviewer confirmation distinct from
+  // the model's verification verdict. Absent = unreviewed. Never overwrites
+  // model fields — original evidence + verification stay intact for audit.
+  humanReview?: HumanReview;
 }
 
 export interface ReportStatistics {

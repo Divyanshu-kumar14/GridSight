@@ -141,3 +141,39 @@ body {
     transition-duration: 0.001s !important;
   }
 }
+
+@media print {
+  :root {
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --panel: #ffffff;
+    --line: #cbd5e1;
+  }
+  body {
+    background: #fff !important;
+    color: #0f172a !important;
+  }
+  main {
+    background: #fff !important;
+    color: #0f172a !important;
+  }
+  .panel,
+  header.panel,
+  article.panel {
+    background: #fff !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+    break-inside: avoid;
+  }
+  article.panel {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  img {
+    max-width: 100% !important;
+    break-inside: avoid;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}

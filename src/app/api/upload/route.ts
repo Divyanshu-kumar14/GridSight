@@ -10,14 +10,19 @@ import { createSession, ensureScratchDirs, scratchDir } from "@/lib/store";
 
 const execFileAsync = promisify(execFile);
 
-// POST /api/upload — multipart: video* (MP4/MOV ≤500MB), audio?, substationName, inspectorName.
+// POST /api/upload — multipart: video* (MP4/MOV ≤500MB), audio?, substationName?, inspectorName?.
+// Metadata is optional — empty values become "Not provided" (never invented).
 // 201 { sessionId, videoFileId, videoDuration, videoFps } · 400 validation · 502 upstream.
 const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 
 const metaSchema = z.object({
-  substationName: z.string().min(1).max(200),
-  inspectorName: z.string().min(1).max(200),
+  substationName: z.string().max(200).optional().default(""),
+  inspectorName: z.string().max(200).optional().default(""),
 });
+
+function cleanName(v: unknown): string {
+  return typeof v === "string" && v.trim().length > 0 ? v.trim().slice(0, 200) : "Not provided";
+}
 
 export async function POST(req: Request): Promise<NextResponse> {
   let form: FormData;
@@ -68,13 +73,15 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const sessionId = randomUUID();
   const now = new Date().toISOString();
+  const substationName = cleanName(parsed.success ? parsed.data.substationName : "");
+  const inspectorName = cleanName(parsed.success ? parsed.data.inspectorName : "");
 
   // Offline demo mode: skip Files upload entirely (zero burn), session works end-to-end.
   if (process.env.USE_CACHED === "true") {
     createSession({
       id: sessionId,
-      substationName: parsed.data.substationName,
-      inspectorName: parsed.data.inspectorName,
+      substationName,
+      inspectorName,
       date: now,
       status: "tracking",
       videoFileId: `cached-${sessionId}`,
@@ -172,8 +179,8 @@ export async function POST(req: Request): Promise<NextResponse> {
 
     createSession({
       id: sessionId,
-      substationName: parsed.data.substationName,
-      inspectorName: parsed.data.inspectorName,
+      substationName,
+      inspectorName,
       date: now,
       status: "tracking",
       videoFileId,

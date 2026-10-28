@@ -41,6 +41,8 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
+  const [sampleBusy, setSampleBusy] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
 
   const submit = async (form: UploadForm, upload: { sessionId: string }) => {
     setBusy(true);
@@ -53,6 +55,22 @@ export default function Home() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
       setBusy(false);
+    }
+  };
+
+  const openSample = async () => {
+    setSampleBusy(true);
+    setSampleError(null);
+    try {
+      const res = await fetch("/api/demo-session", { method: "POST" });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.sessionId) {
+        throw new Error(json?.error?.message ?? "Sample inspection unavailable.");
+      }
+      router.push(`/inspection/${json.sessionId}/report?sample=1`);
+    } catch (err) {
+      setSampleError(err instanceof Error ? err.message : "Sample inspection unavailable.");
+      setSampleBusy(false);
     }
   };
 
@@ -112,13 +130,34 @@ export default function Home() {
             Upload drone footage of any substation — no training data needed — and get a
             prioritized defect report in minutes, not hours.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <a href="#start" className="btn-primary inline-flex items-center gap-2">
-              Start inspection <ArrowRight className="h-4 w-4" />
-            </a>
-            <a href="#how" className="btn-ghost inline-flex items-center gap-2">
-              See how it works
-            </a>
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/[0.06] p-4">
+              <p className="text-sm font-bold text-slate-100">Explore a sample inspection</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                No API key, no upload, no cost. Opens a complete sample report from frozen
+                fixtures — clearly marked as sample/cached data, not from your video.
+              </p>
+              <button
+                onClick={openSample}
+                disabled={sampleBusy}
+                className="btn-primary mt-3 inline-flex w-full items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {sampleBusy ? "Opening sample…" : "Open sample report"} <FileCheck className="h-4 w-4" />
+              </button>
+              {sampleError && (
+                <p role="alert" className="mt-2 text-xs text-red-400">{sampleError}</p>
+              )}
+            </div>
+            <div className="rounded-md border p-4" style={{ borderColor: "var(--line)" }}>
+              <p className="text-sm font-bold text-slate-100">Start a new inspection</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                For your own footage. Needs a 1–3 min MP4/MOV clip; voice memo optional.
+                Live inference sends media to the configured model provider.
+              </p>
+              <a href="#start" className="btn-ghost mt-3 inline-flex w-full items-center justify-center gap-2">
+                Start live inspection <ArrowRight className="h-4 w-4" />
+              </a>
+            </div>
           </div>
           <p className="mt-6 max-w-xl border-t pt-5 text-sm leading-relaxed text-slate-500" style={{ borderColor: "var(--line)" }}>
             Manual climbs cover 10–20% of assets, and a fifth of defects escape entirely.
@@ -193,8 +232,17 @@ export default function Home() {
       {/* Start */}
       <section id="start" className="border-t" style={{ borderColor: "var(--line)" }}>
         <div className="mx-auto max-w-3xl px-4 py-14">
-          <h2 className="text-3xl font-bold tracking-tight">Run an inspection</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Start a new (live) inspection</h2>
           <p className="mt-2 text-sm text-slate-500">MP4/MOV up to 500MB · voice memo optional · 1–3 minute clips demo best</p>
+          <div className="mt-4 rounded-md border border-line bg-panel px-3 py-2 text-xs leading-relaxed text-slate-400">
+            <p className="font-bold text-slate-200">Before live inference — cost &amp; privacy</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4">
+              <li>Uploaded video (and optional audio) is sent to the configured model provider for tracking, transcription, and analysis. This can consume promotional credits or incur cost — exact cost depends on your provider plan.</li>
+              <li>Never put secrets in the browser. API keys live server-side in <span className="font-mono">.env.local</span> only.</li>
+              <li>Sample mode (<span className="font-mono">USE_CACHED=true</span> or “Open sample report”) runs zero inference and is clearly labelled as cached demo data.</li>
+              <li>Artifacts are stored under the server scratch dir + SQLite (<span className="font-mono">GRIDSIGHT_TMP_DIR/gridsight.db</span>) — delete a session via the dashboard or by removing its rows/files. See <span className="font-mono">docs/SETUP.md</span>.</li>
+            </ul>
+          </div>
           {uploadPct !== null && (
             <div className="mt-4">
               <PipelineProgress

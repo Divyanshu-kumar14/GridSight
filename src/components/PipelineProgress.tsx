@@ -9,7 +9,7 @@ import { Check, X } from "lucide-react";
 export interface PipeStep {
   key: string;
   label: string;
-  status: "pending" | "running" | "complete" | "error" | "skipped";
+  status: "pending" | "running" | "complete" | "error" | "skipped" | "needs-attention";
   error?: string;
 }
 
@@ -19,6 +19,7 @@ const chip: Record<PipeStep["status"], string> = {
   complete: "border-green-600 text-green-300",
   error: "border-red-600 text-red-300",
   skipped: "border-slate-700 text-slate-500",
+  "needs-attention": "border-amber-600 text-amber-200",
 };
 
 export default function PipelineProgress({ steps }: { steps: PipeStep[] }) {

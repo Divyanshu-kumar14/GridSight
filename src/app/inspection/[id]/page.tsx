@@ -32,7 +32,7 @@ export default function InspectionPage() {
 
   const [src, setSrc] = useState<string | null>(null);
   const [objects, setObjects] = useState<TrackedObject[]>([]);
-  const [tracking, setTracking] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [tracking, setTracking] = useState<"idle" | "running" | "done" | "error" | "skipped">("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [persistNotice, setPersistNotice] = useState<string | null>(null);
@@ -40,11 +40,11 @@ export default function InspectionPage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [transcribing, setTranscribing] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [transcribing, setTranscribing] = useState<"idle" | "running" | "done" | "error" | "skipped">("idle");
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [stagedAudio, setStagedAudio] = useState<File | null>(null);
   const [tagged, setTagged] = useState<Record<string, TaggedNote>>({});
-  const [tagging, setTagging] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [tagging, setTagging] = useState<"idle" | "running" | "done" | "error" | "skipped">("idle");
   const [tagError, setTagError] = useState<string | null>(null);
   const [tagFallback, setTagFallback] = useState(false);
   const [report, setReport] = useState<DefectReport | null>(null);
@@ -54,6 +54,11 @@ export default function InspectionPage() {
   const [fps, setFps] = useState(30);
   const [substation, setSubstation] = useState<string | null>(null);
   const [tab, setTab] = useState<"assets" | "transcript" | "report">("assets");
+  const [guidedRunning, setGuidedRunning] = useState(false);
+  const [guidedMsg, setGuidedMsg] = useState<string | null>(null);
+  const [isSample, setIsSample] = useState(false);
+  const [hasVoiceServer, setHasVoiceServer] = useState(false);
+  const guidedRef = useRef(false);
 
   const fetchThumbs = useCallback(
     async (objs: TrackedObject[]) => {
@@ -111,6 +116,29 @@ export default function InspectionPage() {
         const f = Number(json?.session?.videoFps);
         if (Number.isFinite(f) && f > 0) setFps(f);
         if (typeof json?.session?.substationName === "string") setSubstation(json.session.substationName);
+        if (json?.session?.isSample === true) setIsSample(true);
+        if (typeof json?.session?.voiceFileId === "string" && json.session.voiceFileId) setHasVoiceServer(true);
+        if (Array.isArray(json?.transcript) && json.transcript.length > 0) {
+          setSegments(json.transcript as TranscriptSegment[]);
+          setTranscribing("done");
+        }
+        if (Array.isArray(json?.tagged) && json.tagged.length > 0) {
+          const map: Record<string, TaggedNote> = {};
+          for (const n of json.tagged as TaggedNote[]) map[n.segmentId] = n;
+          setTagged(map);
+          setTagging("done");
+        }
+        if (json?.hasReport === true) {
+          fetch(`/api/generate-report?sessionId=${encodeURIComponent(sessionId)}`)
+            .then((r) => r.json().catch(() => null))
+            .then((rj) => {
+              if (rj?.report) {
+                setReport(rj.report as DefectReport);
+                setReporting("done");
+              }
+            })
+            .catch(() => null);
+        }
       })
       .catch(() => null);
     void refreshPersisted("mount");
@@ -125,29 +153,43 @@ export default function InspectionPage() {
     return max;
   }, [objects]);
 
+  const stepStatus = (
+    s: "idle" | "running" | "done" | "error" | "skipped",
+  ): PipeStep["status"] =>
+    s === "idle" ? "pending" : s === "running" ? "running" : s === "done" ? "complete" : s === "skipped" ? "skipped" : "error";
+
+  const stepLabel = (base: string, s: "idle" | "running" | "done" | "error" | "skipped"): string => {
+    if (s === "idle") return `${base} — Waiting`;
+    if (s === "running") return `${base} — Running`;
+    if (s === "done") return `${base} — Complete`;
+    if (s === "skipped") return `${base} — Skipped`;
+    return `${base} — Needs attention`;
+  };
+
+  const reportStep: "idle" | "running" | "done" | "error" = reporting;
   const steps: PipeStep[] = [
-    { key: "upload", label: "UPLOAD", status: "complete" },
+    { key: "upload", label: "UPLOAD — Complete", status: "complete" },
     {
       key: "track",
-      label: tracking === "running" ? `TRACK ${progress}%` : "TRACK",
-      status: tracking === "idle" ? "pending" : tracking === "running" ? "running" : tracking === "done" ? "complete" : "error",
+      label: tracking === "running" ? `TRACK — Running ${progress}%` : stepLabel("TRACK", tracking),
+      status: tracking === "error" && objects.length > 0 ? "needs-attention" : stepStatus(tracking),
       error: tracking === "error" ? (error ?? "failed") : undefined,
     },
-    { key: "transcribe", label: "Transcribe", status: transcribing === "idle" ? "pending" : transcribing === "running" ? "running" : transcribing === "done" ? "complete" : "error",
+    { key: "transcribe", label: stepLabel("TRANSCRIBE", transcribing), status: transcribing === "error" && segments.length > 0 ? "needs-attention" : stepStatus(transcribing),
       error: transcribing === "error" ? (transcribeError ?? "failed") : undefined },
-    { key: "tag", label: tagging === "done" && tagFallback ? "Tag assets (fallback)" : "Tag assets",
-      status: tagging === "idle" ? "pending" : tagging === "running" ? "running" : tagging === "done" ? "complete" : "error",
+    { key: "tag", label: tagging === "done" && tagFallback ? "TAG — Complete (fallback)" : stepLabel("TAG", tagging),
+      status: tagging === "error" && Object.keys(tagged).length > 0 ? "needs-attention" : stepStatus(tagging),
       error: tagging === "error" ? (tagError ?? "failed") : undefined },
-    { key: "report", label: "Report",
-      status: reporting === "idle" ? "pending" : reporting === "running" ? "running" : reporting === "done" ? "complete" : "error",
-      error: reporting === "error" ? (reportError ?? "failed") : undefined },
+    { key: "report", label: reportStep === "running" ? `REPORT — Running (${reportFound} found)` : stepLabel("REPORT", reportStep),
+      status: reportStep === "error" && report !== null ? "needs-attention" : stepStatus(reportStep),
+      error: reportStep === "error" ? (reportError ?? "failed") : undefined },
   ];
 
   const [trackJobId, setTrackJobId] = useState<string | null>(null);
   const trackAbort = useRef<AbortController | null>(null);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
 
-  const startTracking = async () => {
+  const startTracking = async (): Promise<boolean> => {
     setTracking("running");
     setProgress(0);
     setError(null);
@@ -155,6 +197,7 @@ export default function InspectionPage() {
     setTrackJobId(null);
     const controller = new AbortController();
     trackAbort.current = controller;
+    let ok = false;
     try {
       const res = await fetch("/api/track", {
         method: "POST",
@@ -193,6 +236,7 @@ export default function InspectionPage() {
               setTracking("done");
               toast.success(`Tracking complete — ${objs.length} assets detected`);
               void fetchThumbs(objs);
+              ok = true;
             } else if (evt.type === "cancelled") {
               setTracking("idle");
               // Server-confirmed cancel (the job row carries it too) — report
@@ -205,6 +249,17 @@ export default function InspectionPage() {
         }
       } finally {
         clearTimeout(timeout);
+      }
+      // Stream ended without tracking_complete and without error → treat as
+      // failure unless objects already persisted (partial recovery path).
+      if (!ok && tracking !== "done") {
+        const persisted = await loadPersistedTracking(sessionId);
+        if (persisted && persisted.objects.length > 0) {
+          setObjects(persisted.objects);
+          void fetchThumbs(persisted.objects);
+          setTracking("done");
+          ok = true;
+        }
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -223,6 +278,7 @@ export default function InspectionPage() {
     } finally {
       trackAbort.current = null;
     }
+    return ok;
   };
 
   const cancelTracking = async () => {
@@ -236,7 +292,7 @@ export default function InspectionPage() {
     }
   };
 
-  const transcribe = async () => {
+  const transcribe = async (): Promise<boolean> => {
     setTranscribing("running");
     setTranscribeError(null);
     try {
@@ -255,20 +311,36 @@ export default function InspectionPage() {
       }
       const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(json?.error?.message ?? `Transcribe failed (${res.status}).`);
+        const code = (json?.error as { code?: string } | undefined)?.code;
+        const msg = json?.error?.message ?? `Transcribe failed (${res.status}).`;
+        // No audio supplied is a clean skip — not a failure. Guided runs
+        // continue to tagging/report without voice notes.
+        if (res.status === 404 || code === "no_audio") {
+          setTranscribing("skipped");
+          setSegments([]);
+          return true;
+        }
+        throw new Error(msg);
       }
       setSegments(Array.isArray(json?.segments) ? json.segments : []);
       setTranscribing("done");
       toast.success("Transcript ready");
+      return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Transcription failed.";
       setTranscribeError(msg);
       toast.error(msg);
       setTranscribing("error");
+      return false;
     }
   };
 
-  const tagAssets = async () => {
+  const tagAssets = async (): Promise<boolean> => {
+    // No transcript → clean skip (video-only workflow). Not an error.
+    if (segments.length === 0 && !stagedAudio && !hasVoiceServer) {
+      setTagging("skipped");
+      return true;
+    }
     setTagging("running");
     setTagError(null);
     try {
@@ -279,6 +351,11 @@ export default function InspectionPage() {
       }, TIMEOUTS.tag);
       const json = await res.json().catch(() => null);
       if (!res.ok) {
+        const code = (json?.error as { code?: string } | undefined)?.code;
+        if (res.status === 400 && code === "no_transcript") {
+          setTagging("skipped");
+          return true;
+        }
         throw new Error(json?.error?.message ?? `Tagging failed (${res.status}).`);
       }
       const notes: TaggedNote[] = Array.isArray(json?.taggedNotes) ? json.taggedNotes : [];
@@ -288,24 +365,27 @@ export default function InspectionPage() {
       setTagFallback(json?.fallback === true);
       setTagging("done");
       toast.success(`${notes.length} segments tagged`);
+      return true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Tagging failed.";
       setTagError(msg);
       toast.error(msg);
       setTagging("error");
+      return false;
     }
   };
 
   const [reportJobId, setReportJobId] = useState<string | null>(null);
   const reportAbort = useRef<AbortController | null>(null);
 
-  const generateReport = async () => {
+  const generateReport = async (): Promise<boolean> => {
     setReporting("running");
     setReportError(null);
     setReportFound(0);
     setReportJobId(null);
     const controller = new AbortController();
     reportAbort.current = controller;
+    let ok = false;
     try {
       const res = await fetch("/api/generate-report", {
         method: "POST",
@@ -342,6 +422,7 @@ export default function InspectionPage() {
               setReport(rep);
               setReporting("done");
               toast.success(`Report ready — ${rep?.defects?.length ?? reportFound} defect(s) found`);
+              ok = true;
             } else if (evt.type === "cancelled") {
               setReporting("idle");
               setReportError("Report cancelled.");
@@ -365,6 +446,77 @@ export default function InspectionPage() {
       }
     } finally {
       reportAbort.current = null;
+    }
+    return ok;
+  };
+
+  // Guided end-to-end run: track → transcribe? → tag? → report → verify (inside report).
+  // Skips audio stages cleanly when no memo exists. Never reruns completed billable
+  // stages: tracking/report already done are reused. Returns explicit success/failure
+  // per stage (no React-state timing tricks) — a failed stage stops the run but keeps
+  // earlier valid results plus actionable guidance.
+  const runGuidedInspection = async (): Promise<void> => {
+    if (guidedRef.current) return;
+    guidedRef.current = true;
+    setGuidedRunning(true);
+    setGuidedMsg("Starting guided inspection…");
+    try {
+      // Stage 1: tracking (skip if already done — billable, don't repeat).
+      if (objects.length === 0) {
+        setGuidedMsg("Step 1/4 — Tracking assets in video…");
+        const ok = await startTracking();
+        if (!ok) {
+          setGuidedMsg("Tracking needs attention — fix the error below or retry. Earlier results (if any) are preserved.");
+          return;
+        }
+      } else {
+        setGuidedMsg("Step 1/4 — Tracking already complete, reusing saved assets.");
+      }
+      // Stage 2: transcription (skip cleanly when no audio).
+      const wantsAudio = !!stagedAudio || hasVoiceServer || segments.length > 0;
+      if (!wantsAudio) {
+        setTranscribing((prev) => (prev === "done" ? prev : "skipped"));
+        setGuidedMsg("Step 2/4 — No voice memo supplied, skipping transcription.");
+      } else if (segments.length === 0) {
+        setGuidedMsg("Step 2/4 — Transcribing voice memo…");
+        const ok = await transcribe();
+        if (!ok) {
+          setGuidedMsg("Transcription failed — retry transcription, or continue manually without voice notes. Tracking results are preserved.");
+          return;
+        }
+      } else {
+        setGuidedMsg("Step 2/4 — Transcript already ready, reusing it.");
+      }
+      // Stage 3: tag assets (skip when no transcript).
+      if (segments.length === 0) {
+        setTagging((prev) => (prev === "done" ? prev : "skipped"));
+        setGuidedMsg("Step 3/4 — No transcript, skipping note-to-asset matching.");
+      } else if (Object.keys(tagged).length === 0) {
+        setGuidedMsg("Step 3/4 — Matching notes to assets…");
+        const ok = await tagAssets();
+        if (!ok) {
+          setGuidedMsg("Note matching needs attention — retry tagging or continue to the report (visual findings still work). Tracking + transcript are preserved.");
+          return;
+        }
+      } else {
+        setGuidedMsg("Step 3/4 — Notes already matched, reusing tags.");
+      }
+      // Stage 4: report + verification.
+      if (!report) {
+        setGuidedMsg("Step 4/4 — Generating report + AI re-check…");
+        const ok = await generateReport();
+        if (!ok) {
+          setGuidedMsg("Report generation failed — retry the report stage. Tracking, transcript and tags are preserved.");
+          return;
+        }
+      } else {
+        setGuidedMsg("Step 4/4 — Report already ready.");
+      }
+      setGuidedMsg("Guided inspection complete — review the report tab. Earlier stages were reused, not rebilled.");
+      setTab("report");
+    } finally {
+      setGuidedRunning(false);
+      guidedRef.current = false;
     }
   };
 
@@ -401,6 +553,36 @@ export default function InspectionPage() {
         <span className="micro-label">Inspection workspace</span>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">Session {sessionId.slice(0, 8)}</h1>
         <p className="mt-1 font-mono text-xs text-slate-400">prompts: {prompts.join(", ")}</p>
+        {isSample && (
+          <p role="status" className="mt-2 inline-block rounded-md border border-amber-600/60 bg-amber-950/40 px-2 py-1 font-mono text-[11px] font-bold tracking-wider text-amber-300">
+            SAMPLE / CACHED — frozen demo data, not from your video. No inference was run for this session.
+          </p>
+        )}
+        <div className="mt-3 rounded-md border border-line bg-panel p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-slate-100">Guided inspection — one click, correct order</p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                Runs Track → Transcribe (skipped if no audio) → Match notes → Report + AI re-check. Completed billable stages are reused, not rerun. Manual actions below still work.
+              </p>
+            </div>
+            <button
+              onClick={runGuidedInspection}
+              disabled={guidedRunning || tracking === "running" || reporting === "running" || transcribing === "running" || tagging === "running"}
+              className="rounded-md bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-40"
+            >
+              {guidedRunning ? "Running…" : objects.length > 0 || report ? "Continue guided run" : "Run inspection"}
+            </button>
+          </div>
+          {(guidedMsg || guidedRunning) && (
+            <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-300">{guidedMsg}</p>
+          )}
+          {!guidedRunning && (tracking === "error" || transcribing === "error" || tagging === "error" || reporting === "error") && (
+            <p className="mt-2 text-xs text-slate-400">
+              A stage needs attention — fix it below with Retry, then press “Continue guided run” to resume without repeating completed stages. Valid earlier results are preserved.
+            </p>
+          )}
+        </div>
         <div className="mt-3">
           <PipelineProgress steps={steps} />
         </div>
