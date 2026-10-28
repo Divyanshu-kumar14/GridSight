@@ -67,7 +67,11 @@ describe("runTrackPrompts orchestration", () => {
     const { deps, persisted } = harness({
       prompts: ["pole", "tower"],
       trackPrompt,
-      isCancelled: () => ++calls > 1,
+      // Parallel launch does one global pre-check plus one pre-check per
+      // prompt (3 calls before any SAM call). Threshold >2 keeps the intent:
+      // first prompt proceeds, second sees cancel — same as the old
+      // sequential ">1" (1 loop check + 1 second-prompt check).
+      isCancelled: () => ++calls > 2,
     });
     const out = await runTrackPrompts(deps);
     expect(out.status).toBe("cancelled");
@@ -101,18 +105,28 @@ describe("runTrackPrompts orchestration", () => {
       },
     });
     await expect(runTrackPrompts(deps)).rejects.toThrow(/already closed/);
-    // First prompt was persisted BEFORE the failed send.
-    expect(persisted).toHaveLength(1);
+    // Both prompts persisted BEFORE the failed send (parallel: each prompt
+    // saves its own completion before onPromptDone throws; the old sequential
+    // loop only reached one persist before throwing).
+    expect(persisted).toHaveLength(2);
     expect(persisted[0]).toHaveLength(1);
   });
 
   it("a prompt finishing after the deadline is not counted complete, but its frames are kept", async () => {
+    // Parallel-safe: a single prompt whose clock jumps past the budget during
+    // the SAM call (started in-budget, finished out-of-budget). The old test
+    // used 3 prompts with a ticking clock, which assumed sequential
+    // per-iteration budget checks; parallel pre-checks would time out all
+    // three before any SAM call.
     let t = 0;
-    const trackPrompt = vi.fn(async () => [det("0")]);
+    const trackPrompt = vi.fn(async () => {
+      t = 10000;
+      return [det("0")];
+    });
     const { deps, persisted } = harness({
-      prompts: ["pole", "tower", "fence"],
+      prompts: ["pole"],
       trackPrompt,
-      now: () => (t += 1000),
+      now: () => t,
       budgetMs: 1500,
     });
     const out = await runTrackPrompts(deps);

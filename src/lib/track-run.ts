@@ -9,6 +9,15 @@
 // each prompt, and always persists completed prompts first. A run that outlives
 // the client ends as timeout/disconnect with partials saved — never silently.
 //
+// Parallel policy: all prompts fire simultaneously via Promise.allSettled.
+// Each prompt runs the same per-prompt body as the old sequential loop
+// (partial-frame incremental persists, same TRACK_CANCELLED / TRACK_TIMEOUT /
+// AbortError classification, same onFrame / onPromptDone / signal wiring).
+// Overall status is complete only if every prompt succeeded; any cancelled →
+// cancelled, any timeout → timeout, any disconnected → disconnected. Merged
+// objects from every prompt that DID complete are always reported, so an
+// infra failure on one prompt never silently discards other prompts' results.
+//
 // Evidence (2026-10-28 SAM debug): one prompt streamed 60M chars / 470 frames
 // while others returned nothing, and the 5-minute client abort landed mid-run.
 // The old loop persisted only after ALL prompts, checked cancel only inside
@@ -75,7 +84,11 @@ export async function runTrackPrompts(deps: TrackRunDeps): Promise<TrackRunOutco
   const startedAt = now();
   const overBudget = () => now() - startedAt > budgetMs;
   const categories = prompts.map((p) => p.trim().toLowerCase());
-  const groups: TrackedObject[][] = [];
+  // Completed groups by prompt index (parallel-safe: each slot written once
+  // by its own prompt; reads filter out not-yet-finished slots).
+  const byIndex: (TrackedObject[] | undefined)[] = new Array(categories.length);
+  const completedSoFar = (): TrackedObject[][] =>
+    byIndex.filter((g): g is TrackedObject[] => Array.isArray(g));
   // Mirrors exactly what was last persisted, so every terminal outcome
   // reports the same objects the store already holds — never silently more.
   let lastPersisted: TrackedObject[] = [];
@@ -83,18 +96,35 @@ export async function runTrackPrompts(deps: TrackRunDeps): Promise<TrackRunOutco
     persist(objects);
     lastPersisted = objects;
   };
-  for (let pi = 0; pi < categories.length; pi++) {
+
+  // Global boundary checks before launching any SAM call (same as the old
+  // loop's pi=0 checks).
+  if (isCancelled()) {
+    return { status: "cancelled", objects: lastPersisted, completedPrompts: 0 };
+  }
+  if (overBudget()) {
+    return { status: "timeout", objects: lastPersisted, completedPrompts: 0 };
+  }
+
+  type PerPromptResult = {
+    status: "ok" | "cancelled" | "timeout" | "disconnected";
+    objects: TrackedObject[];
+  };
+
+  const runOne = async (category: string, pi: number): Promise<PerPromptResult> => {
+    // Per-prompt boundary check (mirrors the old loop's per-iteration check;
+    // under parallel launch this is what lets a flag set mid-run cancel
+    // not-yet-started prompts without dropping already-finished ones).
     if (isCancelled()) {
-      return { status: "cancelled", objects: lastPersisted, completedPrompts: pi };
+      return { status: "cancelled", objects: [] };
     }
     if (overBudget()) {
-      return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
+      return { status: "timeout", objects: [] };
     }
-    const category = categories[pi];
-    // Frames parsed so far for the ACTIVE prompt. Rebuilt into trackable
+    // Frames parsed so far for THIS prompt. Rebuilt into trackable
     // objects and persisted incrementally, so a cancel/timeout/disconnect
     // mid-prompt keeps evidence instead of dropping it. Never enters
-    // `groups` (deduped below), so completed prompts are never duplicated.
+    // `byIndex` directly (deduped below), so completed prompts are never duplicated.
     // IDs stay stable: buildTrackedObjects assigns them deterministically in
     // first-seen order, and the final build sees the same order.
     const partialFrames: { frameIndex: number; detections: RawDetection[] }[] = [];
@@ -112,7 +142,7 @@ export async function runTrackPrompts(deps: TrackRunDeps): Promise<TrackRunOutco
             seenFrame.add(prog.frame.frameIndex);
             partialFrames.push(prog.frame);
             const partial = buildTrackedObjects({ sessionId, category, frames: partialFrames, fps });
-            save(mergeAndDedupe([...groups, partial]));
+            save(mergeAndDedupe([...completedSoFar(), partial]));
           }
           onFrame({ prompt: category, promptIndex: pi, frameIndex: prog.frameIndex, totalSoFar: prog.totalSoFar });
         },
@@ -124,22 +154,22 @@ export async function runTrackPrompts(deps: TrackRunDeps): Promise<TrackRunOutco
       );
     } catch (err) {
       if (err instanceof Error && err.message === TRACK_CANCELLED) {
-        return { status: "cancelled", objects: lastPersisted, completedPrompts: pi };
+        return { status: "cancelled", objects: [] };
       }
       if (err instanceof Error && err.message === TRACK_TIMEOUT) {
-        return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
+        return { status: "timeout", objects: [] };
       }
       // An aborted upstream request means manual cancel, client disconnect,
       // or an expired budget racing the abort. Classify explicitly — never a
       // silent "disconnected" when the cancel flag or budget says otherwise.
       if (isAbortError(err)) {
         if (isCancelled()) {
-          return { status: "cancelled", objects: lastPersisted, completedPrompts: pi };
+          return { status: "cancelled", objects: [] };
         }
         if (overBudget()) {
-          return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
+          return { status: "timeout", objects: [] };
         }
-        return { status: "disconnected", objects: lastPersisted, completedPrompts: pi };
+        return { status: "disconnected", objects: [] };
       }
       throw err;
     }
@@ -148,12 +178,40 @@ export async function runTrackPrompts(deps: TrackRunDeps): Promise<TrackRunOutco
     // they are still built and persisted (never silently dropped).
     const finishedInBudget = !overBudget();
     const objects = buildTrackedObjects({ sessionId, category, frames: raw, fps });
-    groups.push(objects);
-    save(mergeAndDedupe(groups));
+    byIndex[pi] = objects;
+    save(mergeAndDedupe(completedSoFar()));
     onPromptDone({ prompt: category, count: objects.length });
     if (!finishedInBudget) {
-      return { status: "timeout", objects: lastPersisted, completedPrompts: pi };
+      return { status: "timeout", objects };
     }
+    return { status: "ok", objects };
+  };
+
+  const settlements = await Promise.allSettled(categories.map((category, pi) => runOne(category, pi)));
+
+  // Infra failure on one prompt must NEVER silently discard other prompts:
+  // every completed prompt already persisted via save() above, and
+  // lastPersisted holds the merged evidence. An unexpected throw (e.g. a
+  // closed SSE stream from onPromptDone) still rejects — matching the old
+  // loop — but only after all prompts settled and persisted.
+  const firstRejected = settlements.find(
+    (s): s is PromiseRejectedResult => s.status === "rejected",
+  );
+  if (firstRejected) {
+    throw firstRejected.reason;
+  }
+  const results = settlements.map((s) =>
+    s.status === "fulfilled" ? s.value : null,
+  ) as (PerPromptResult | null)[];
+  const okCount = results.filter((r) => r?.status === "ok").length;
+  if (results.some((r) => r?.status === "cancelled")) {
+    return { status: "cancelled", objects: lastPersisted, completedPrompts: okCount };
+  }
+  if (results.some((r) => r?.status === "timeout")) {
+    return { status: "timeout", objects: lastPersisted, completedPrompts: okCount };
+  }
+  if (results.some((r) => r?.status === "disconnected")) {
+    return { status: "disconnected", objects: lastPersisted, completedPrompts: okCount };
   }
   return { status: "complete", objects: lastPersisted, completedPrompts: categories.length };
 }
