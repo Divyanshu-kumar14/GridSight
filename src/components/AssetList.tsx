@@ -78,7 +78,7 @@ export default function AssetList({
           </Select.Portal>
         </Select.Root>
       </div>
-      <ScrollArea.Root className="max-h-80">
+      <ScrollArea.Root className="h-80">
         <ScrollArea.Viewport className="h-full w-full">
           <ul className="grid grid-cols-2 gap-2 pr-3">
         {visible.map((o, index) => (
