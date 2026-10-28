@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import type { ReportStatistics } from "@/lib/types";
 
 // Contract: horizontal segmented severity bar (no chart lib).
@@ -17,17 +18,31 @@ export default function SeverityChart({ stats }: { stats: ReportStatistics }) {
     <div role="img" aria-label={`Defects: ${total} total — ${rows.map((r) => `${r.label} ${r.count}`).join(", ")}`}>
       <div className="flex h-3 w-full overflow-hidden rounded bg-slate-900">
         {rows.map(
-          (r) =>
+          (r, idx) =>
             r.count > 0 && (
-              <div key={r.label} style={{ width: `${(r.count / total) * 100}%`, background: r.color }} title={`${r.label} ${r.count}`} />
+              <motion.div
+                key={r.label}
+                style={{ background: r.color }}
+                className="h-full origin-left"
+                title={`${r.label} ${r.count}`}
+                initial={{ scaleX: 0, width: `${(r.count / total) * 100}%` }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.7, delay: idx * 0.12, ease: [0.16, 1, 0.3, 1] }}
+              />
             ),
         )}
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px]">
-        {rows.map((r) => (
-          <span key={r.label} className={r.text}>
+        {rows.map((r, idx) => (
+          <motion.span
+            key={r.label}
+            className={r.text}
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: 0.5 + idx * 0.1 }}
+          >
             {r.label} {r.count}
-          </span>
+          </motion.span>
         ))}
       </div>
     </div>

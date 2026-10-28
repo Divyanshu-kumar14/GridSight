@@ -2,6 +2,7 @@
 
 import { ArrowDown, Check, Mic, Minus } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
+import { motion } from "framer-motion";
 import type { Defect } from "@/lib/types";
 
 // Contract: one severity-ranked defect with visuals, actions, and seek link.
@@ -130,9 +131,23 @@ export default function DefectCard({
       {/* Right two thirds: finding */}
       <div className="p-4 sm:col-span-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded px-2.5 py-1 font-mono text-sm font-bold text-slate-950 ${badge[defect.severity]}`}>
+          <motion.span
+            className={`rounded px-2.5 py-1 font-mono text-sm font-bold text-slate-950 ${badge[defect.severity]}`}
+            animate={
+              defect.severity === "CRITICAL"
+                ? {
+                    boxShadow: [
+                      "0 0 0px 0px #ef444400",
+                      "0 0 12px 4px #ef4444aa",
+                      "0 0 0px 0px #ef444400",
+                    ],
+                  }
+                : {}
+            }
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+          >
             {defect.severity}
-          </span>
+          </motion.span>
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
               <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider ${evidenceBadge(defect)}`}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
   FileCheck,
@@ -80,7 +81,32 @@ export default function Home() {
       <section className="relative z-10 mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 lg:grid-cols-2 lg:pt-20">
         <div style={{ animation: "gs-rise 0.9s cubic-bezier(0.16,1,0.3,1) both" }}>
           <h1 className="text-balance text-5xl font-bold leading-[1.04] tracking-tight sm:text-6xl">
-            Every defect on the yard, tagged.
+            <motion.span
+              className="inline"
+              initial="hidden"
+              animate="visible"
+              variants={{
+                visible: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } },
+              }}
+            >
+              {"Every defect on the yard, tagged.".split(" ").map((word, i) => (
+                <motion.span
+                  key={i}
+                  className="mr-[0.25em] inline-block"
+                  variants={{
+                    hidden: { opacity: 0, y: 18, filter: "blur(4px)" },
+                    visible: {
+                      opacity: 1,
+                      y: 0,
+                      filter: "blur(0px)",
+                      transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] },
+                    },
+                  }}
+                >
+                  {word}
+                </motion.span>
+              ))}
+            </motion.span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-400">
             Upload drone footage of any substation — no training data needed — and get a

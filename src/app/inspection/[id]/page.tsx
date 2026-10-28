@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import AssetList from "@/components/AssetList";
 import PipelineProgress, { type PipeStep } from "@/components/PipelineProgress";
@@ -483,27 +484,55 @@ export default function InspectionPage() {
                   ))}
                 </Tabs.List>
                 <Tabs.Content value="assets">
-                  <AssetList objects={objects} selectedId={selectedId} thumbs={thumbs} onSelect={seekToObject} />
+                  <AnimatePresence>
+                    <motion.div
+                      key="assets"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <AssetList objects={objects} selectedId={selectedId} thumbs={thumbs} onSelect={seekToObject} />
+                    </motion.div>
+                  </AnimatePresence>
                 </Tabs.Content>
                 <Tabs.Content value="transcript">
-                  <TranscriptPanel
-                    segments={segments}
-                    busy={transcribing === "running"}
-                    error={transcribeError}
-                    stagedName={stagedAudio ? stagedAudio.name : null}
-                    tagged={tagged}
-                    tagBusy={tagging === "running"}
-                    tagError={tagError}
-                    onAudioReady={setStagedAudio}
-                    onTranscribe={transcribe}
-                    onTag={tagAssets}
-                    onSeek={setSeekTo}
-                    onAssetClick={highlightAsset}
-                    onEditSegment={editSegment}
-                  />
+                  <AnimatePresence>
+                    <motion.div
+                      key="transcript"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <TranscriptPanel
+                        segments={segments}
+                        busy={transcribing === "running"}
+                        error={transcribeError}
+                        stagedName={stagedAudio ? stagedAudio.name : null}
+                        tagged={tagged}
+                        tagBusy={tagging === "running"}
+                        tagError={tagError}
+                        onAudioReady={setStagedAudio}
+                        onTranscribe={transcribe}
+                        onTag={tagAssets}
+                        onSeek={setSeekTo}
+                        onAssetClick={highlightAsset}
+                        onEditSegment={editSegment}
+                      />
+                    </motion.div>
+                  </AnimatePresence>
                 </Tabs.Content>
                 <Tabs.Content value="report">
-                  <div className="p-4">
+                  <AnimatePresence>
+                    <motion.div
+                      key="report"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <div className="p-4">
                     <button
                       onClick={generateReport}
                       disabled={reporting === "running" || objects.length === 0}
@@ -551,7 +580,9 @@ export default function InspectionPage() {
                         <p className="mt-2 text-xs text-slate-500">The full report opens here after generation.</p>
                       )
                     )}
-                  </div>
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
                 </Tabs.Content>
               </Tabs.Root>
             </div>

@@ -68,15 +68,44 @@ export default function VideoOverlayPlayer({
     }
     for (const b of visible) {
       const selected = selectedId !== undefined && b.id === selectedId;
+      // Corner arm length: 14px
+      const arm = 14;
       const x = b.bbox.x * canvas.width;
       const y = b.bbox.y * canvas.height;
       const w = b.bbox.w * canvas.width;
       const h = b.bbox.h * canvas.height;
       ctx.strokeStyle = b.color;
-      ctx.lineWidth = selected ? 4 : 2;
-      ctx.strokeRect(x, y, w, h);
-      ctx.fillStyle = b.color;
-      ctx.fillText(b.id, x + 3, y + 13);
+      ctx.lineWidth = selected ? 3 : 2;
+
+      // If selected: add glow
+      if (selected) {
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 12;
+      }
+
+      // Draw four L-corners
+      const drawCorner = (cx: number, cy: number, dx: number, dy: number) => {
+        ctx.beginPath();
+        ctx.moveTo(cx + dx * arm, cy);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx, cy + dy * arm);
+        ctx.stroke();
+      };
+      drawCorner(x,     y,     1,  1);   // top-left
+      drawCorner(x + w, y,    -1,  1);   // top-right
+      drawCorner(x,     y + h, 1, -1);   // bottom-left
+      drawCorner(x + w, y + h,-1, -1);   // bottom-right
+
+      // Reset shadow after each selected box
+      ctx.shadowBlur = 0;
+
+      // Label: filled pill behind the text
+      const label = b.id;
+      const metrics = ctx.measureText(label);
+      ctx.fillStyle = b.color + "cc"; // 80% opacity
+      ctx.fillRect(x + 2, y + 2, metrics.width + 8, 16);
+      ctx.fillStyle = "#05070c";
+      ctx.fillText(label, x + 6, y + 14);
     }
   };
 
