@@ -138,18 +138,31 @@ export async function POST(req: Request): Promise<NextResponse> {
     const { readFile } = await import("node:fs/promises");
     const wavBytes = await readFile(wavPath);
     const form = new FormData();
-    form.append("file", new Blob([new Uint8Array(wavBytes)], { type: "audio/wav" }), "voice.wav");
-    form.append("model", ASR_MODEL);
-    form.append("mode", "DIARIZATION");
-    form.append("language", "en");
+    // Meta Model API file-transcription contract
+    // (dev.meta.ai/docs/speech-to-text): multipart with a JSON `request`
+    // part plus the WAV `audio` part. OpenAI-style parts
+    // (file/model/mode/language) are rejected with 400:
+    // "Both a 'request' and an 'audio' part are required".
+    form.append(
+      "request",
+      new Blob(
+        [JSON.stringify({ mode: "DIARIZATION", model: ASR_MODEL, audioEncoding: "WAV" })],
+        { type: "application/json" },
+      ),
+    );
+    form.append("audio", new Blob([new Uint8Array(wavBytes)], { type: "audio/wav" }), "voice.wav");
 
-    const upstream = await fetch(TRANSCRIBE_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-    });
+    const upstream = await fetch(
+      `${TRANSCRIBE_URL}?sessionId=${encodeURIComponent(sessionId)}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: form,
+      },
+    );
     if (!upstream.ok) {
-      throw new Error(`Transcribe upstream ${upstream.status}.`);
+      const detail = (await upstream.text().catch(() => "")).slice(0, 300);
+      throw new Error(`Transcribe upstream ${upstream.status}.${detail ? ` ${detail}` : ""}`);
     }
     const raw: unknown = await upstream.json();
     const segments = buildTranscriptSegments(raw, sessionId);

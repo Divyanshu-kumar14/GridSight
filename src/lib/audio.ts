@@ -87,14 +87,39 @@ export interface RawSegment {
   text?: unknown;
 }
 
-// Accepts {segments:[...]} or bare array. Normal: mapped with trimmed text.
-// Empty: [] → []. Invalid entries (non-numeric times, empty text) dropped, never crash.
+interface RawTurn {
+  speaker?: unknown;
+  startMs?: unknown;
+  endMs?: unknown;
+  transcript?: unknown;
+}
+
+// Meta file-transcription turns use ms timestamps and `transcript` text;
+// normalize to the segment shape so the shared guard below applies.
+function turnToSegmentShape(turn: unknown): RawSegment {
+  const t = (turn ?? {}) as RawTurn;
+  const startMs = Number(t.startMs);
+  const endMs = Number(t.endMs);
+  return {
+    speaker: t.speaker,
+    start: Number.isFinite(startMs) ? startMs / 1000 : NaN,
+    end: Number.isFinite(endMs) ? endMs / 1000 : NaN,
+    text: t.transcript,
+  };
+}
+
+// Accepts {segments:[...]}, Meta's {turns:[...]} (startMs/endMs/transcript/
+// speaker, per dev.meta.ai/docs/speech-to-text), or a bare array. Normal:
+// mapped with trimmed text. Empty: [] → []. Invalid entries (non-numeric
+// times, empty text) dropped, never crash.
 export function buildTranscriptSegments(raw: unknown, sessionId: string): TranscriptSegment[] {
   const list: unknown[] = Array.isArray(raw)
     ? raw
     : raw && typeof raw === "object" && Array.isArray((raw as { segments?: unknown }).segments)
       ? ((raw as { segments: unknown[] }).segments as unknown[])
-      : [];
+      : raw && typeof raw === "object" && Array.isArray((raw as { turns?: unknown }).turns)
+        ? ((raw as { turns: unknown[] }).turns.map(turnToSegmentShape) as unknown[])
+        : [];
   const out: TranscriptSegment[] = [];
   list.forEach((item, i) => {
     const seg = (item ?? {}) as RawSegment;

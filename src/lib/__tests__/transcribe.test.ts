@@ -70,6 +70,32 @@ describe("buildTranscriptSegments", () => {
     const out = buildTranscriptSegments([{ start: 0, end: 1, text: "hi" }], "s1");
     expect(out[0].speaker).toBe("SPEAKER_0");
   });
+
+  it("maps Meta turns (ms timestamps) to segments", () => {
+    const out = buildTranscriptSegments(
+      {
+        sessionId: "9f1c",
+        transcript: "How is the weather? It is raining.",
+        audioDurationMs: 8240,
+        turns: [
+          { turnId: 1, startMs: 1520, endMs: 4640, transcript: " How is the weather? ", speaker: "A" },
+          { turnId: 2, startMs: 5900, endMs: 8240, transcript: "It is raining.", speaker: "B" },
+        ],
+      },
+      "s1",
+    );
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({ id: "s1-seg-000", speaker: "A", startTime: 1.52, endTime: 4.64, text: "How is the weather?" });
+    expect(out[1]).toMatchObject({ id: "s1-seg-001", speaker: "B", startTime: 5.9, text: "It is raining." });
+  });
+
+  it("drops malformed turns instead of crashing", () => {
+    const out = buildTranscriptSegments(
+      { turns: [{ turnId: 1, startMs: "x", endMs: 2, transcript: "bad" }, null] },
+      "s1",
+    );
+    expect(out).toEqual([]);
+  });
 });
 
 describe("summarizeSegments", () => {
