@@ -24,11 +24,15 @@ What you are seeing:
   evidence images, verification verdicts, and CSV still work.
 - These results were **not** generated from any video you upload.
 
-Or with Docker:
+Or with Docker (no API key, no env file needed on a fresh clone):
 
 ```bash
 docker compose up --build   # http://localhost:3000 → Open sample report
 ```
+
+`docker-compose.yml` treats `.env.local` as optional, so Compose starts
+without it. Live inference inside Docker needs `.env.local` with
+`MODEL_API_KEY` (see section 2), then `docker compose up --build` again.
 
 ## 2. Run a live inspection (your own footage)
 
@@ -68,10 +72,14 @@ live sessions never fall back to canned output on failure (errors fail loudly).
 
 ```bash
 npm run dev        # start (Ctrl+C to stop)
-# or
+# or (no .env.local needed for the sample)
 docker compose up --build     # start
 docker compose down           # stop (data volume is kept)
 ```
+
+Docker on a fresh clone: no environment-file step is required for the
+sample. Add live credentials later with `cp .env.example .env.local`
+(edit in `MODEL_API_KEY`), then re-run `docker compose up --build`.
 
 Health check (no auth, no secrets):
 

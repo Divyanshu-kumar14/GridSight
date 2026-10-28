@@ -151,8 +151,8 @@ Prerequisites: **Node 22.5+** (uses `node:sqlite`), `ffmpeg` + `ffprobe` on `PAT
 
 ```bash
 npm install
-cp .env.example .env.local   # then set MODEL_API_KEY
-npm run dev                  # http://localhost:3000
+npm run dev                  # http://localhost:3000 → Open sample report (no key needed)
+# Live inference only: cp .env.example .env.local, then set MODEL_API_KEY
 ```
 
 | Command | What it does |
@@ -253,7 +253,10 @@ Serverless can't run this app (`ffmpeg`/`ffprobe` for probing and key frames, wr
 docker build -t gridsight .
 docker run -p 3000:3000 -e MODEL_API_KEY="$MODEL_API_KEY" gridsight
 # or (persistent storage + healthcheck + restart):
+# Fresh clone, sample first — no .env.local needed (.env.local is optional):
 docker compose up --build
+# Live inference afterwards: cp .env.example .env.local, set MODEL_API_KEY,
+# then re-run: docker compose up --build
 ```
 
 See `docs/SETUP.md` for ports, volumes (`gridsight-data` → `/tmp/opencode/gridsight`),
@@ -271,7 +274,7 @@ backup/delete, and troubleshooting.
 - Thumbnail/key-frame extraction needs `ffmpeg`; failures skip loudly per-asset without failing the batch.
 - No cross-flight asset re-identification: two inspections never claim the same physical asset without manual confirmation (Asset Condition Passport deferred).
 - Scene-level tracking prompts (e.g. "electrical substation") return whole-frame boxes — use object-level prompts ("insulator", "transformer tank") for usable tracks.
-- PDF export is deferred; CSV export ships (with `evidenceSource` + `observation` columns).
+- Exports: CSV ships (with `evidenceSource` + `observation` columns); **Print / Save as PDF** works through the browser's print dialog (`window.print()` + print CSS in `globals.css`) — accurately labelled, not a direct download. Direct server-generated PDF export is not implemented.
 
 ## License
 

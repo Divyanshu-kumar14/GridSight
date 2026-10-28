@@ -6,9 +6,13 @@ services:
     ports:
       - "3000:3000"
     # Runtime-only credentials: never bake secrets into the image.
-    # Copy .env.example to .env.local and set MODEL_API_KEY there.
+    # .env.local is OPTIONAL: a fresh clone with no .env.local starts fine
+    # and can reach the sample report (POST /api/demo-session, zero inference).
+    # Create .env.local with MODEL_API_KEY only when enabling live inference.
+    # `required: false` needs Docker Compose v2+ (Compose Specification).
     env_file:
-      - .env.local
+      - path: .env.local
+        required: false
     environment:
       GRIDSIGHT_TMP_DIR: /tmp/opencode/gridsight
     volumes:
