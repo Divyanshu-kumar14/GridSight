@@ -1,6 +1,6 @@
 # GridSight
 
-Drone footage of a substation goes in; a severity-ranked defect list comes out — every finding tagged **VISUAL** (cited frame) or **VOICE ONLY** (inspector's words, unverified), exportable as CSV.
+I built GridSight so drone footage of a substation turns into a severity-ranked defect list — every finding tagged **VISUAL** (cited frame) or **VOICE ONLY** (inspector's words, unverified), exportable as CSV.
 
 [![License: MIT](https://img.shields.io/github/license/Divyanshu-kumar14/GridSight)](LICENSE)
 
@@ -8,13 +8,13 @@ Drone footage of a substation goes in; a severity-ranked defect list comes out �
 
 ## Overview
 
-One substation pass produces thousands of frames. No inspector watches all of it at 1× and catches everything. GridSight is for the substation inspector who flies the yard, dictates notes on the drive back, and needs a ranked defect list before the next shift.
+One substation pass produces thousands of frames. No inspector watches all of it at 1× and catches everything. I made GridSight for the inspector who flies the yard, dictates notes on the drive back, and needs a ranked defect list before the next shift.
 
 **Before:** 45 minutes of 60fps drone video = 162,000 frames to review, plus an estimated ~3 hours of manual video scrubbing and spreadsheet logging back at the office. **After:** a roughly 15-minute automated pass during the drive back → verified, frame-cited CSV defect list ready before the truck parks. *(Frame count is exact arithmetic; the time figures are planning estimates, not measured results.)*
 
-Upload a clip → track every asset with SAM 3.1 video segmentation → transcribe voice notes → pin each note to the asset visible at that moment → generate a report where Spark writes the defects and the server rebuilds the envelope. A second verification pass re-checks every visual finding against a fresh extraction of the exact frame it cited, and the model must answer one question: does this frame concretely show the claimed damage?
+The loop I wired: upload a clip → track every asset with SAM 3.1 video segmentation → transcribe voice notes → pin each note to the asset visible at that moment → generate a report where Spark writes the defects and my server code rebuilds the envelope. A second verification pass re-checks every visual finding against a fresh extraction of the exact frame it cited, and the model has to answer one question: does this frame concretely show the claimed damage?
 
-No key? `USE_CACHED=true` serves frozen fixtures for the full loop with zero API burn — an offline fallback, not live data. The cached demo showcases both paths: one **VISUAL** verified finding (frame citation + tracked SAM bbox + `keep` verdict) and one **VOICE ONLY** downgraded finding.
+No key? `USE_CACHED=true` serves frozen fixtures for the full loop with zero API burn — an offline fallback I froze myself, not live data. The cached demo showcases both paths: one **VISUAL** verified finding (frame citation + tracked SAM bbox + `keep` verdict) and one **VOICE ONLY** downgraded finding.
 
 ## Try it in 60 seconds
 
@@ -26,36 +26,36 @@ npm run dev   # http://localhost:3000 → Open sample report
 ```
 
 Click **Open sample report** (Explore a sample inspection). It calls `POST /api/demo-session`
-— a validated endpoint that builds a fresh session from frozen fixtures with zero inference —
+— a validated endpoint I added that builds a fresh session from frozen fixtures with zero inference —
 and opens a complete sample report clearly marked **SAMPLE / CACHED** (not from your video,
 no playable video). For live inference, set `MODEL_API_KEY` in `.env.local` and use
-**Start a new (live) inspection** instead. Full guide: `docs/SETUP.md`.
+**Start a new (live) inspection** instead. I wrote the full guide in `docs/SETUP.md`.
 
 ## Features
 
-- **Sample in one click, live when ready** — homepage offers Explore sample (no key, no upload, `POST /api/demo-session`) vs Start live (MP4/MOV + optional voice, presets, advanced prompts). Sample vs live is always labelled; live failures never fall back to canned output.
-- **Guided inspection run** — workspace **Run inspection** executes Track → Transcribe (skipped cleanly with no audio) → Match notes → Report + AI re-check in order, reusing completed billable stages, preserving partials, with per-stage Retry/Cancel and refresh recovery. Manual stage buttons remain.
-- **Track every asset in one pass** — SAM 3.1 multiplex segmentation with native-frame timestamps; per-prompt results persist incrementally so a late failure never wipes earlier prompts (`src/lib/track-run.ts`).
-- **Dictate instead of typing** — in-browser recording or audio upload, diarized into timestamped transcript segments. Video-only workflows skip transcription + tagging honestly.
+- **Sample in one click, live when ready** — I split the homepage into Explore sample (no key, no upload, `POST /api/demo-session`) vs Start live (MP4/MOV + optional voice, presets, advanced prompts). Sample vs live is always labelled; I never let live failures fall back to canned output.
+- **Guided inspection run** — the workspace **Run inspection** button I added executes Track → Transcribe (skipped cleanly with no audio) → Match notes → Report + AI re-check in order, reusing completed billable stages, preserving partials, with per-stage Retry/Cancel and refresh recovery. The manual stage buttons are still there.
+- **Track every asset in one pass** — SAM 3.1 multiplex segmentation with native-frame timestamps; I persist per-prompt results incrementally so a late failure never wipes earlier prompts (`src/lib/track-run.ts`).
+- **Dictate instead of typing** — in-browser recording or audio upload, diarized into timestamped transcript segments. I made video-only workflows skip transcription + tagging honestly.
 - **Notes pinned to assets, not timestamps** — each voice note links to the tracked object visible when it was spoken.
-- **Reports that cite evidence** — every defect carries a frame citation, AI re-check status (`AI re-checked` / `Downgraded to voice-only` / `Rejected by AI review` / `Re-check unavailable`), and human-review status; the server rebuilds statistics + coverage itself instead of trusting model JSON.
-- **Honest coverage, no all-clear hype** — stable-track rate is labelled as such (not inspection coverage); the ledger shows assets represented vs not in key frames, skipped re-checks, unresolved links, and items needing review. Zero findings says “No defects were confirmed in the evidence reviewed — not proof the yard is defect-free.”
-- **Human review that sticks** — Confirm / Reject / Needs inspection + note + asset/description/action corrections via validated `POST /api/report-review` (session-owned, unknown IDs rejected, verification untouched, survives refresh).
+- **Reports that cite evidence** — every defect carries a frame citation, AI re-check status (`AI re-checked` / `Downgraded to voice-only` / `Rejected by AI review` / `Re-check unavailable`), and human-review status; my server code rebuilds statistics + coverage itself instead of trusting model JSON.
+- **Honest coverage, no all-clear hype** — I label the stable-track rate as what it is (not inspection coverage); the ledger shows assets represented vs not in key frames, skipped re-checks, unresolved links, and items needing review. Zero findings says “No defects were confirmed in the evidence reviewed — not proof the yard is defect-free.”
+- **Human review that sticks** — Confirm / Reject / Needs inspection + note + asset/description/action corrections through my validated `POST /api/report-review` (session-owned, unknown IDs rejected, verification untouched, survives refresh).
 - **Usable exports** — CSV (with evidence provenance) plus **Print / Save as PDF** (print CSS, evidence images + overlays, limitations, AI-support warning).
-- **Zero-hallucination default** — with no voice notes and no transcript, the model is instructed to return zero defects rather than invent damage.
-- **Honest benchmarks** — a real-image static benchmark that reports NOT EVALUATED instead of a fake score when no predictions are supplied, plus a committed cached run that scores (see [Evaluation](#evaluation)).
+- **Zero-hallucination default** — with no voice notes and no transcript, I instruct the model to return zero defects rather than invent damage.
+- **Honest benchmarks** — I keep a real-image static benchmark that reports NOT EVALUATED instead of a fake score when no predictions are supplied, plus a committed cached run that scores (see [Evaluation](#evaluation)).
 
 ## Key innovations
 
-- **Verification pass with teeth** (`src/lib/verify.ts`, tests in `src/lib/__tests__/verify.test.ts`): visual findings are re-extracted at 1024px from the cited frame and re-judged. `drop` removes the finding, `downgrade` strips visual claims to VOICE ONLY, and a failed infrastructure call marks `skipped` — kept, never deleted, because deleting findings on infra failure is the worst failure mode in a safety product.
-- **Server-built report envelope** (`src/app/api/generate-report/route.ts`): the model sometimes returns just `{summary, defects}` and drops the envelope, so the API validates only the defects and recomputes inspection/statistics itself.
-- **Native-rate timestamps** (`src/lib/ffmpeg.ts`): upload probes real fps via `ffprobe`; SAM frame indices convert with it. A hardcoded 30 fps silently doubles every timestamp on 60 fps footage — this bit us once.
-- **Resumable tracking runs** (`src/lib/track-run.ts`, `src/app/api/track/route.ts`): per-prompt persistence, prompt-boundary cancel checks, a server-side time budget, and closed-stream disconnects reported as disconnects with partial counts — not as model errors, never as silent empty results.
-- **Auditable evaluation** (`scripts/bench.ts`, `fixtures/benchmark/real-v1/`): run manifests bind predictions to the execution that produced them (digests, dataset version, input checksums, per-frame provider-request evidence). The static-image benchmark separates detection (frame + category + visual evidence) from localization, and marks defect localization unavailable where ground-truth strips and model damage boxes annotate different targets — instead of laundering one into the other.
+- **Verification pass with teeth** (`src/lib/verify.ts`, tests in `src/lib/__tests__/verify.test.ts`): I re-extract visual findings at 1024px from the cited frame and re-judge them. `drop` removes the finding, `downgrade` strips visual claims to VOICE ONLY, and a failed infrastructure call marks `skipped` — kept, never deleted, because I consider deleting findings on infra failure the worst failure mode in a safety product.
+- **Server-built report envelope** (`src/app/api/generate-report/route.ts`): the model sometimes returns just `{summary, defects}` and drops the envelope, so I validate only the defects and recompute inspection/statistics myself.
+- **Native-rate timestamps** (`src/lib/ffmpeg.ts`): I probe real fps via `ffprobe` at upload; SAM frame indices convert with it. A hardcoded 30 fps silently doubles every timestamp on 60 fps footage — this bit me once.
+- **Resumable tracking runs** (`src/lib/track-run.ts`, `src/app/api/track/route.ts`): per-prompt persistence, prompt-boundary cancel checks, a server-side time budget, and closed-stream disconnects I report as disconnects with partial counts — not as model errors, never as silent empty results.
+- **Auditable evaluation** (`scripts/bench.ts`, `fixtures/benchmark/real-v1/`): I bind run manifests to the execution that produced the predictions (digests, dataset version, input checksums, per-frame provider-request evidence). My static-image benchmark separates detection (frame + category + visual evidence) from localization, and marks defect localization unavailable where ground-truth strips and model damage boxes annotate different targets — instead of laundering one into the other.
 
 ## Meta platform usage
 
-All calls go through the Meta API (`https://api.meta.ai/v1`, OpenAI-compatible client); model IDs live in `src/lib/models.ts`.
+I route every call through the Meta API (`https://api.meta.ai/v1`, OpenAI-compatible client); model IDs live in `src/lib/models.ts`.
 
 | Role | Model | Used in |
 |---|---|---|
@@ -63,7 +63,7 @@ All calls go through the Meta API (`https://api.meta.ai/v1`, OpenAI-compatible c
 | Ears | `muse-voice-transcribe-1.0` | `src/app/api/transcribe/route.ts` — diarized drive-back memos |
 | Analyst | `muse-spark-1.3` (or Muse Spark Open via `SPARK_PROVIDER`) | `src/lib/tagging.ts`, `src/app/api/generate-report/route.ts` — note-to-asset matching, defect drafting, verification verdicts |
 
-Tracking (SAM), Files, and transcription always stay on Meta; only tagging/report/verification can move to Baseten or Modal. The active provider is stamped on every report (`modelRun`).
+Tracking (SAM), Files, and transcription always stay on Meta; only tagging/report/verification can move to Baseten or Modal. I stamp the active provider on every report (`modelRun`).
 
 ## Architecture
 
@@ -89,7 +89,7 @@ Upload probes duration/fps and stashes the clip; tracking streams per-prompt pro
 
 ## Hackathon Contributions
 
-What follows is limited to what `git log` shows. The initial commit (`e380f4f`) contains only `LICENSE` and a two-line README stub — that is the pre-existing foundation in this repository's history. The application and everything below it were added in the commits after it:
+I'm keeping this strictly to what `git log` shows. The initial commit (`e380f4f`) contains only `LICENSE` and a two-line README stub — that was the pre-existing foundation in this repo's history. I added the application and everything below it in the commits after that:
 
 - **End-to-end inspection pipeline** (`056c1f2`): upload, SAM tracking, transcription, note tagging, and the defect-report flow in one Next.js app.
 - **Evidence-cited reporting** (`34ab1d6`, `75dea05`, `bf51dad`): key frames sent to Spark, evidence labeled server-side, and a second-pass verification audit of visual findings.
@@ -98,11 +98,11 @@ What follows is limited to what `git log` shows. The initial commit (`e380f4f`) 
 - **Tracking hardening** (`5211763`, `90aa83b`, `858d7cc`): per-prompt persistence, retry isolation, upstream cancel propagation, time budgets, and partial-result handling so late failures do not wipe earlier prompts.
 - **Deployment** (`18802ac`): Docker container with a health endpoint.
 
-The demo path is the one in [Try it in 60 seconds](#try-it-in-60-seconds): cached mode runs the same upload → track → transcribe → tag → report loop on frozen fixtures with no API calls, and the report it returns distinguishes one VISUAL verified finding from one VOICE ONLY downgraded finding. Live mode uses the three-model workflow in [Meta platform usage](#meta-platform-usage); no image-generation model runs in either path.
+The demo path is the one in [Try it in 60 seconds](#try-it-in-60-seconds): cached mode runs the same upload → track → transcribe → tag → report loop on frozen fixtures with no API calls, and the report it returns distinguishes one VISUAL verified finding from one VOICE ONLY downgraded finding. Live mode uses the three-model workflow in [Meta platform usage](#meta-platform-usage); I run no image-generation model in either path.
 
 ## Evaluation
 
-Three harnesses, all runnable without a key or network. Numbers below were reproduced from this repo (vitest 301 passed / 23 files; `eval:smoke` 11 checks passed).
+Three harnesses, all runnable without a key or network. I reproduced the numbers below from this repo (vitest 333 passed / 25 files; `eval:smoke` 11 checks passed).
 
 **Frame eval** — cached model outputs re-scored against 30 labeled frames (20 clean, 10 defective), zero quota:
 
@@ -116,7 +116,7 @@ GridSight eval — 30 frames (20 clean, 10 defective) — model muse-spark-1.3
 first pass P=1.00 R=1.00 FP=0 FN=0 · verified P=1.00 R=1.00 FP=0 FN=0
 ```
 
-Read honestly: the 10 defective frames are adjacent seconds of the *same* rusted pole, not ten independent defects. This measures hallucination rate and single-defect recall — a smoke test, not a benchmark. `fixtures/eval/cache/` holds the recorded per-frame responses; ground truth in `fixtures/eval/labels.json` was set by viewing frames before any model run.
+Read honestly: the 10 defective frames are adjacent seconds of the *same* rusted pole, not ten independent defects. I treat this as a hallucination-rate and single-defect-recall smoke test, not a benchmark. `fixtures/eval/cache/` holds the recorded per-frame responses; I set ground truth in `fixtures/eval/labels.json` by viewing frames before any model run.
 
 **Real-image benchmark** — 13 annotated cases over 12 derivative stills (3 scenes, 6 assets, 1 rust-pole defect episode across 5 frames), with checksummed provenance in `fixtures/benchmark/real-v1/`:
 
@@ -126,9 +126,9 @@ npm run bench:real   # real-v1: exits 2, every case NOT EVALUATED — no artifac
 npm run bench:real:scored  # real-v1 + committed cached predictions: PASS, P=1.00 R=1.00
 ```
 
-The scored run uses `fixtures/benchmark/real-v1/predictions-cached-v1.json` — 12 recorded `muse-spark-1.3` outputs (`provenance: cached`, 5 visual rust keeps on f021/f023/f025/f028/f030, 7 clean no-findings) scored with the static frame-linked matcher. Detection matches on frame + category + visual evidence only; boxes never gate detection on this path. `provenance: actual` would require a run manifest with per-frame provider-request evidence (see `PREDICTIONS.md`) — this artifact honestly stays `cached`, never `actual`.
+The scored run uses `fixtures/benchmark/real-v1/predictions-cached-v1.json` — 12 recorded `muse-spark-1.3` outputs (`provenance: cached`, 5 visual rust keeps on f021/f023/f025/f028/f030, 7 clean no-findings) scored with the static frame-linked matcher. I match detection on frame + category + visual evidence only; boxes never gate detection on this path. `provenance: actual` would require a run manifest with per-frame provider-request evidence (see `PREDICTIONS.md`) — this artifact honestly stays `cached`, never `actual`.
 
-No predictions ship with the dataset by default, so visual accuracy reports UNAVAILABLE until matching pipeline predictions are recorded (`--predictions=<artifact.json>`). Exit codes are contractual: 0 pass · 1 fail · 2 not-evaluated · 3 input error. An incomplete or manifest-less run exits 2 — never a silent pass, never a fabricated zero.
+No predictions ship with the dataset by default, so visual accuracy reports UNAVAILABLE until matching pipeline predictions are recorded (`--predictions=<artifact.json>`). I made the exit codes contractual: 0 pass · 1 fail · 2 not-evaluated · 3 input error. An incomplete or manifest-less run exits 2 — never a silent pass, never a fabricated zero.
 
 ## What is real vs. simulated
 
@@ -147,7 +147,7 @@ No predictions ship with the dataset by default, so visual accuracy reports UNAV
 
 ## Quick start
 
-Prerequisites: **Node 22.5+** (uses `node:sqlite`), `ffmpeg` + `ffprobe` on `PATH` (duration/fps probing, thumbnails, key frames).
+You'll need **Node 22.5+** (I use `node:sqlite`), plus `ffmpeg` + `ffprobe` on `PATH` (duration/fps probing, thumbnails, key frames).
 
 ```bash
 npm install
@@ -190,13 +190,13 @@ All in `.env.local` (never committed):
 | `GRIDSIGHT_TMP_DIR` | No | `/tmp/opencode/gridsight` | Scratch dir (video, frames, audio, reports) |
 | `GRIDSIGHT_DB_PATH` | No | `<scratch>/gridsight.db` | SQLite path override |
 
-Missing keys fail loudly at request time, never by silent fallback. Tracking (SAM), Files, and transcription always stay on Meta.
+I fail loudly at request time on missing keys, never by silent fallback. Tracking (SAM), Files, and transcription always stay on Meta.
 
 ## Tech stack
 
-- **App:** Next.js 14 App Router, React 18, Tailwind CSS. No database server — SQLite via `node:sqlite` (WAL mode) plus a local scratch dir.
-- **AI:** `openai` SDK pointed at Meta; all model IDs in `src/lib/models.ts`. Muse Image retired from the report path (deterministic bbox overlays instead).
-- **Validation:** Zod schemas on every API boundary; envelope-tolerant report parsing.
+- **App:** Next.js 14 App Router, React 18, Tailwind CSS. I run no database server — SQLite via `node:sqlite` (WAL mode) plus a local scratch dir.
+- **AI:** `openai` SDK pointed at Meta; I keep all model IDs in `src/lib/models.ts`. I retired Muse Image from the report path (deterministic bbox overlays instead).
+- **Validation:** I put Zod schemas on every API boundary; envelope-tolerant report parsing.
 - **Tests:** Vitest, co-located in `src/lib/__tests__/`.
 
 ## Project structure
@@ -247,7 +247,7 @@ docs/          SETUP.md (plain-English local setup)
 
 ## Deploy (Docker)
 
-Serverless can't run this app (`ffmpeg`/`ffprobe` for probing and key frames, writable SQLite, local scratch dir), so it ships as a container:
+Serverless can't run what I built (`ffmpeg`/`ffprobe` for probing and key frames, writable SQLite, local scratch dir), so I ship it as a container:
 
 ```bash
 docker build -t gridsight .
@@ -266,14 +266,14 @@ backup/delete, and troubleshooting.
 
 ## Known limits
 
-- Single-user, single-node: SQLite + local scratch dir, no auth. Human review records no reviewer identity (no auth) — only status/note/corrections + timestamp.
-- The sample (`POST /api/demo-session` or `USE_CACHED=true`) is a frozen two-finding sample: one `VISUAL` AI re-checked finding and one `VOICE ONLY` downgraded finding. No playable video. The `VISUAL` path on live footage needs a real run — freeze it with `scripts/cache-demo.ts` before recording.
+- Single-user, single-node: SQLite + local scratch dir, no auth. My human review records no reviewer identity (I have no auth) — only status/note/corrections + timestamp.
+- The sample (`POST /api/demo-session` or `USE_CACHED=true`) is a frozen two-finding sample I froze: one `VISUAL` AI re-checked finding and one `VOICE ONLY` downgraded finding. No playable video. The `VISUAL` path on live footage needs a real run — I freeze those with `scripts/cache-demo.ts` before recording.
 - Key frames are downscaled to 1280px (q≈4, ~40–150KB) before they are sent to Spark; full-resolution frames would blow the vision request budget. Only ≤8 key frames are reviewed per report — assets absent from those frames were not visually reviewed (shown as “not represented”).
 - “Stable-track rate” (≥3 observations) is not inspection coverage; “AI re-checked” is not ground truth or engineer approval. Zero findings never means the yard is defect-free.
 - Transcription needs staged audio (record in-browser or attach a file); visual findings still work without it, but note-only findings require a transcript.
 - Thumbnail/key-frame extraction needs `ffmpeg`; failures skip loudly per-asset without failing the batch.
-- No cross-flight asset re-identification: two inspections never claim the same physical asset without manual confirmation (Asset Condition Passport deferred).
-- Scene-level tracking prompts (e.g. "electrical substation") return whole-frame boxes — use object-level prompts ("insulator", "transformer tank") for usable tracks.
+- No cross-flight asset re-identification: I never claim two inspections show the same physical asset without manual confirmation (Asset Condition Passport deferred).
+- Scene-level tracking prompts (e.g. "electrical substation") return whole-frame boxes — I recommend object-level prompts ("insulator", "transformer tank") for usable tracks.
 - Exports: CSV ships (with `evidenceSource` + `observation` columns); **Print / Save as PDF** works through the browser's print dialog (`window.print()` + print CSS in `globals.css`) — accurately labelled, not a direct download. Direct server-generated PDF export is not implemented.
 
 ## License
