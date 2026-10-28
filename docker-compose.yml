@@ -9,7 +9,7 @@ services:
     # .env.local is OPTIONAL: a fresh clone with no .env.local starts fine
     # and can reach the sample report (POST /api/demo-session, zero inference).
     # Create .env.local with MODEL_API_KEY only when enabling live inference.
-    # `required: false` needs Docker Compose v2+ (Compose Specification).
+    # `required: false` needs Docker Compose v2.24.0 or later (Compose Specification).
     env_file:
       - path: .env.local
         required: false

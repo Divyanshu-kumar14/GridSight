@@ -17,7 +17,7 @@ npm run dev          # http://localhost:3000
 
 What you are seeing:
 
-- Frozen demo data from `fixtures/demo-session/` that I froze — clearly labelled
+- Checked-in demo fixtures from `fixtures/demo-session/` that I committed — clearly labelled
   **SAMPLE / CACHED** in the workspace and report.
 - No API calls, no cost, no video upload needed.
 - The sample has no playable video (“sample — no playable video”): the report,

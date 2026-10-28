@@ -14,7 +14,7 @@ One substation pass produces thousands of frames. No inspector watches all of it
 
 The loop I wired: upload a clip → track every asset with SAM 3.1 video segmentation → transcribe voice notes → pin each note to the asset visible at that moment → generate a report where Spark writes the defects and my server code rebuilds the envelope. A second verification pass re-checks every visual finding against a fresh extraction of the exact frame it cited, and the model has to answer one question: does this frame concretely show the claimed damage?
 
-No key? `USE_CACHED=true` serves frozen fixtures for the full loop with zero API burn — an offline fallback I froze myself, not live data. The cached demo showcases both paths: one **VISUAL** verified finding (frame citation + tracked SAM bbox + `keep` verdict) and one **VOICE ONLY** downgraded finding.
+No key? `USE_CACHED=true` serves frozen fixtures for the full loop with zero API burn — an offline fallback built from checked-in fixtures, not live data. The cached demo showcases both paths: one **VISUAL** verified finding (frame citation + tracked SAM bbox + `keep` verdict) and one **VOICE ONLY** downgraded finding.
 
 ## Try it in 60 seconds
 
@@ -55,7 +55,7 @@ no playable video). For live inference, set `MODEL_API_KEY` in `.env.local` and 
 
 ## Meta platform usage
 
-I route every call through the Meta API (`https://api.meta.ai/v1`, OpenAI-compatible client); model IDs live in `src/lib/models.ts`.
+I send Meta-bound calls — SAM tracking, Files uploads, and transcription — through the Meta API (`https://api.meta.ai/v1`, OpenAI-compatible client); model IDs live in `src/lib/models.ts`. Tagging, report generation, and verification go through the configured Spark endpoint instead (`SPARK_PROVIDER`: `meta`, `baseten`, or `modal`).
 
 | Role | Model | Used in |
 |---|---|---|
@@ -98,7 +98,7 @@ I'm keeping this strictly to what `git log` shows. The initial commit (`e380f4f`
 - **Tracking hardening** (`5211763`, `90aa83b`, `858d7cc`): per-prompt persistence, retry isolation, upstream cancel propagation, time budgets, and partial-result handling so late failures do not wipe earlier prompts.
 - **Deployment** (`18802ac`): Docker container with a health endpoint.
 
-The demo path is the one in [Try it in 60 seconds](#try-it-in-60-seconds): cached mode runs the same upload → track → transcribe → tag → report loop on frozen fixtures with no API calls, and the report it returns distinguishes one VISUAL verified finding from one VOICE ONLY downgraded finding. Live mode uses the three-model workflow in [Meta platform usage](#meta-platform-usage); I run no image-generation model in either path.
+The sample path is the one in [Try it in 60 seconds](#try-it-in-60-seconds): `POST /api/demo-session` builds a fresh session straight from the checked-in fixtures — no upload, no inference, clearly labelled `SAMPLE / CACHED` — and its report distinguishes one VISUAL verified finding from one VOICE ONLY downgraded finding. `USE_CACHED=true` replays the same frozen fixtures through the upload → track → transcribe → tag → report loop with no API calls. Live mode runs the real pipeline with the three-model workflow in [Meta platform usage](#meta-platform-usage); I run no image-generation model in any path.
 
 ## Evaluation
 
@@ -267,7 +267,7 @@ backup/delete, and troubleshooting.
 ## Known limits
 
 - Single-user, single-node: SQLite + local scratch dir, no auth. My human review records no reviewer identity (I have no auth) — only status/note/corrections + timestamp.
-- The sample (`POST /api/demo-session` or `USE_CACHED=true`) is a frozen two-finding sample I froze: one `VISUAL` AI re-checked finding and one `VOICE ONLY` downgraded finding. No playable video. The `VISUAL` path on live footage needs a real run — I freeze those with `scripts/cache-demo.ts` before recording.
+- The sample (`POST /api/demo-session` or `USE_CACHED=true`) is the checked-in two-finding sample: one `VISUAL` AI re-checked finding and one `VOICE ONLY` downgraded finding. No playable video. The `VISUAL` path on live footage needs a real run — I capture those with `scripts/cache-demo.ts` before recording.
 - Key frames are downscaled to 1280px (q≈4, ~40–150KB) before they are sent to Spark; full-resolution frames would blow the vision request budget. Only ≤8 key frames are reviewed per report — assets absent from those frames were not visually reviewed (shown as “not represented”).
 - “Stable-track rate” (≥3 observations) is not inspection coverage; “AI re-checked” is not ground truth or engineer approval. Zero findings never means the yard is defect-free.
 - Transcription needs staged audio (record in-browser or attach a file); visual findings still work without it, but note-only findings require a transcript.
