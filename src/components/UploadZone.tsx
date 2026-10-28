@@ -197,21 +197,21 @@ export default function UploadZone({
     xhr.send(fd);
   };
 
-  const drop = "rounded-md border px-4 py-6 text-center transition-colors cursor-pointer";
+  const drop = "rounded-md border px-4 py-5 text-center transition-colors cursor-pointer sm:py-6";
   const dropIdle = "border-dashed hover:border-amber-500/60 hover:bg-amber-500/[0.03]";
   const dropFull = "border-amber-500/50 bg-amber-500/[0.05]";
 
   return (
-    <div className="panel p-6">
+    <div className="rounded-md border border-line bg-panel p-4 sm:p-6">
       <div className="grid gap-4 md:grid-cols-2">
         <label className={`${drop} ${video ? dropFull : dropIdle}`} style={{ borderColor: video ? undefined : "var(--line)" }}>
           <FileUp className="mx-auto h-6 w-6 text-amber-500" />
-          <span className="mt-2 block text-sm font-semibold">Drone video · MP4/MOV · max 500 MB</span>
-          <span className="mt-1 block font-mono text-xs text-slate-500">
-            {video ? `${video.name} · ${fmtBytes(video.size)}` : "Drop a clip or click to browse"}
+          <span className="mt-2 block text-sm font-semibold text-slate-100">Drone video <span className="font-normal text-slate-400">· MP4/MOV · 500 MB max</span></span>
+          <span className="mt-1 block text-xs text-slate-400">
+            {video ? <code className="break-all">{video.name} · {fmtBytes(video.size)}</code> : "Drop a clip or click to browse"}
           </span>
           {videoMeta && video && (
-            <span className="mt-1 block font-mono text-[11px] text-slate-400">
+            <span className="mt-1 block font-mono text-xs text-slate-500">
               {videoMeta.duration !== null ? `Duration ${fmtClock(videoMeta.duration)}` : "Duration unknown"} ·{" "}
               {videoMeta.width !== null ? `${videoMeta.width}×${videoMeta.height}` : "resolution unknown"}
             </span>
@@ -228,12 +228,12 @@ export default function UploadZone({
         </label>
         <label className={`${drop} ${audio ? dropFull : dropIdle}`} style={{ borderColor: audio ? undefined : "var(--line)" }}>
           <Mic className="mx-auto h-6 w-6 text-slate-400" />
-          <span className="mt-2 block text-sm font-semibold">Voice memo · optional</span>
-          <span className="mt-1 block font-mono text-xs text-slate-500">
-            {audio ? `${audio.name} · ${fmtBytes(audio.size)}` : "WAV or MP3, up to ~10 min"}
+          <span className="mt-2 block text-sm font-semibold text-slate-100">Voice memo <span className="font-normal text-slate-400">· optional</span></span>
+          <span className="mt-1 block text-xs text-slate-400">
+            {audio ? <code className="break-all">{audio.name} · {fmtBytes(audio.size)}</code> : "WAV / MP3 · up to ~10 min"}
           </span>
-          <span className="mt-1 block text-[11px] text-slate-500">
-            Dictate defects on the drive back — notes are timestamped and pinned to the asset visible when spoken. Skip this if you have no audio.
+          <span className="mt-1 block text-xs leading-relaxed text-slate-500">
+            Dictate on the drive back — notes are timestamped and pinned to the asset visible when spoken.
           </span>
           <input
             type="file"
@@ -245,7 +245,7 @@ export default function UploadZone({
           />
         </label>
         <label className="block">
-          <span className="micro-label mb-1 block">Substation <span className="font-normal normal-case text-slate-500">(optional)</span></span>
+          <span className="mb-1 block text-sm font-medium normal-case tracking-normal text-steel">Substation <span className="font-normal normal-case text-slate-500">(optional)</span></span>
           <input
             value={substation}
             disabled={busy}
@@ -255,7 +255,7 @@ export default function UploadZone({
           />
         </label>
         <label className="block">
-          <span className="micro-label mb-1 block">Inspector <span className="font-normal normal-case text-slate-500">(optional)</span></span>
+          <span className="mb-1 block text-sm font-medium normal-case tracking-normal text-steel">Inspector <span className="font-normal normal-case text-slate-500">(optional)</span></span>
           <input
             value={inspector}
             disabled={busy}
@@ -267,7 +267,7 @@ export default function UploadZone({
       </div>
 
       <div className="mt-4">
-        <span className="micro-label mb-1 block">Equipment to track</span>
+        <span className="mb-1 block text-sm font-medium normal-case tracking-normal text-steel">Equipment to track</span>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Equipment presets">
           {PRESET_CATEGORIES.map((cat) => {
             const on = selectedPresets.includes(cat);
@@ -298,23 +298,23 @@ export default function UploadZone({
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
           aria-expanded={showAdvanced}
-          className="mt-2 font-mono text-[11px] text-amber-400 hover:underline"
+          className="mt-2 text-[11px] text-amber-400 hover:underline"
         >
           {showAdvanced ? "Hide advanced prompts" : "Advanced settings: custom prompts"}
         </button>
         {showAdvanced && (
           <div className="mt-2">
             <label className="block">
-              <span className="micro-label mb-1 block">Custom asset prompts (comma-separated)</span>
+              <span className="mb-1 block text-sm font-medium normal-case tracking-normal text-steel">Custom asset prompts (comma-separated)</span>
               <input
                 value={promptText}
                 disabled={busy}
                 onChange={(e) => setPromptText(e.target.value)}
-                className="tabular w-full rounded-md border border-line bg-ink px-3 py-2 font-mono text-sm text-amber-300 placeholder:text-slate-600"
+                className="tabular w-full rounded-md border border-line bg-ink px-3 py-2 text-sm text-amber-300 placeholder:text-slate-600"
                 aria-label="Custom asset prompts"
               />
             </label>
-            <button type="button" onClick={applyPresets} disabled={busy} className="mt-1 font-mono text-[11px] text-slate-400 hover:text-slate-200 hover:underline">
+            <button type="button" onClick={applyPresets} disabled={busy} className="mt-1 text-[11px] text-slate-400 hover:text-slate-200 hover:underline">
               Reset to presets
             </button>
           </div>
@@ -339,14 +339,15 @@ export default function UploadZone({
       <button
         disabled={!valid || busy || uploading}
         onClick={startUpload}
-        className="btn-primary mt-4 inline-flex items-center gap-2"
+        className="btn-primary mt-4 inline-flex items-center gap-2 disabled:opacity-40"
       >
         {(busy || uploading) && <Loader2 className="h-4 w-4 animate-spin" />}
-        {uploading ? "Uploading…" : busy ? "Uploading…" : "Start Inspection"}
+        {uploading ? `Uploading… ${pct ?? 0}%` : "Start Inspection"}
       </button>
+      <span className="ml-3 text-xs text-slate-500">Uploads to your project — then continue in the workspace.</span>
       {uploading && pct !== null && (
         <div className="mt-3 space-y-1">
-          <div className="flex justify-between font-mono text-[11px] text-slate-400">
+          <div className="flex justify-between text-[11px] text-slate-400">
             <span>Uploading…</span>
             <span>{pct}%</span>
           </div>

@@ -1,14 +1,16 @@
-# GridSight DESIGN.md — "Switchyard at night" (v1, code-led rebrand)
+# GridSight DESIGN.md — "Switchyard at night" (v2, hardware board)
 
 World: the yard after dark, read from a control room. Ink-black ground, amber signal
 color, single-line-diagram hairlines with node dots, equipment-nameplate spec rows.
 Dark is forced by the scene (reviewing footage in a dark room), never by category.
+v2 evolves to dense-tiles board: filled 72px bands, 4px gaps, no dividers, steel for secondary text.
 
 ## Tokens
 - Ground `ink #05070C` · panel `#0B111D` · hairline `rgba(148,163,184,.16)` (token `line`)
+- Hardware: porcelain `#E8E4DA` (accent) · steel `#9AA3B2` (secondary) · bus `#334155` (spine)
 - Accent amber-500 `#f59e0b` (hover amber-400); text on amber is always slate-950
 - Severity jobs only: red-500 CRITICAL · orange-500 HIGH · yellow-500 MEDIUM · green-600/400 LOW/ok
-- Body text slate-100/200 · secondary slate-400 · faint slate-500/600
+- Body text slate-100/porcelain · secondary steel/slate-400 · faint slate-500/600
 
 ## Type
 - Display/body: Geist (local `GeistVF`), tight tracking, balanced headlines

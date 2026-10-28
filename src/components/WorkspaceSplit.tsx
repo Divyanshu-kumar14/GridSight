@@ -8,7 +8,9 @@ import { GripVertical } from "lucide-react";
 // callers pass fully-formed `left`/`right` trees and this only owns the split.
 // Normal (md+): horizontal resizable Group, layout persisted to localStorage.
 // Narrow (<md): plain stacked div, no resize machinery. SSR/pre-mount: stacked
-// (matches server HTML, so hydration never diverges).
+// (matches server HTML, so hydration never diverges). Overlays escape: panels
+// never set overflow-hidden, so Radix portals (Select, dropdowns) render
+// unclipped; only media containers clip themselves.
 
 // useDefaultLayout defaults `storage` to `localStorage`, which throws at SSR
 // render time — swap in a no-op store on the server. The Group only mounts
@@ -44,7 +46,7 @@ export default function WorkspaceSplit({
   // Stacked until mounted (SSR-identical), and on narrow viewports after that.
   if (!mounted || !wide) {
     return (
-      <div className="mt-4 space-y-3">
+      <div className="mt-2 space-y-2">
         {left}
         {right}
       </div>
@@ -57,9 +59,9 @@ export default function WorkspaceSplit({
       orientation="horizontal"
       defaultLayout={defaultLayout}
       onLayoutChanged={onLayoutChanged}
-      className="mt-4"
+      className="mt-2"
     >
-      <Panel id="workspace-main" defaultSize="65%" minSize="40%" maxSize="80%" className="min-w-0">
+      <Panel id="workspace-main" defaultSize="65%" minSize="40%" maxSize="80%" className="min-w-0 overflow-visible">
         {left}
       </Panel>
       <Separator
@@ -69,7 +71,7 @@ export default function WorkspaceSplit({
       >
         <GripVertical className="h-4 w-4 text-slate-600 group-hover:text-amber-400 group-data-[separator=active]:text-amber-400 group-data-[separator=focus]:text-amber-400" />
       </Separator>
-      <Panel id="workspace-side" minSize="20%" className="min-w-0">
+      <Panel id="workspace-side" minSize="20%" className="min-w-0 overflow-visible">
         {right}
       </Panel>
     </Group>

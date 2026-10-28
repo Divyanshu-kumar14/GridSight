@@ -7,11 +7,15 @@
   --foreground: #e8edf5;
   --panel: #0b111d;
   --line: rgba(148, 163, 184, 0.16);
-  --amber: #f5a524;
+  --amber: #f59e0b;
+  --porcelain: #e8e4da;
+  --steel: #9aa3b2;
+  --bus: #334155;
 }
 
 html {
   scroll-behavior: smooth;
+  font-size: 16px;
 }
 
 body {
@@ -19,10 +23,13 @@ body {
   background: var(--background);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: "tnum" 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: rgba(245, 165, 36, 0.85);
+  background: rgba(245, 158, 11, 0.85);
   color: #05070c;
 }
 
@@ -50,7 +57,8 @@ body {
     border-color: var(--line);
   }
   .micro-label {
-    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400;
+    @apply text-[13px] font-semibold uppercase tracking-[0.14em];
+    color: var(--steel);
   }
   .btn-primary {
     @apply rounded-md bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40;
@@ -60,9 +68,69 @@ body {
     border-color: var(--line);
   }
   .node-line {
-    background: linear-gradient(to right, transparent, var(--line) 12%, var(--line) 88%, transparent);
+    /* Bus spine: single 1px solid line. No gradients. */
+    background: var(--bus);
     height: 1px;
   }
+  .tile {
+    /* Filled hardware band. Parent provides 4px gap (gap-1). No shadow, no gradient, no glass. */
+    @apply rounded-md border bg-panel;
+    border-color: var(--line);
+  }
+  .board-row {
+    /* 72px filled board band. Stack via parent gap (gap-1); no dividers. */
+    @apply rounded-md border bg-panel;
+    border-color: var(--line);
+    display: flex;
+    align-items: center;
+    min-height: 72px;
+  }
+  .hairline-rule {
+    height: 1px;
+    background: var(--line);
+  }
+  .nav-link {
+    @apply text-sm text-slate-400 transition-colors hover:text-white;
+  }
+  .nav-link-active {
+    @apply text-white;
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-steel;
+  }
+  .muted-copy {
+    @apply text-sm leading-relaxed text-slate-400;
+  }
+}
+
+/* Measure + placeholder polish — scoped, never global text color overrides.
+   Keep intentional secondary tones (steel / slate-400) intact. */
+p {
+  line-height: 1.6;
+}
+p.prose-copy {
+  max-width: 62ch;
+}
+li {
+  line-height: 1.5;
+}
+small {
+  font-size: 0.8125rem;
+}
+
+/* Legibility floor: the two faintest slates never carry body copy on panel. */
+.text-slate-600 {
+  color: var(--steel);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--steel);
+  opacity: 1;
+}
+.placeholder\:text-slate-600::placeholder {
+  color: var(--steel);
+  opacity: 1;
 }
 
 @layer utilities {
@@ -78,7 +146,7 @@ body {
 @keyframes gs-rise {
   from {
     opacity: 0.001;
-    transform: translateY(16px);
+    transform: translateY(24px);
   }
   to {
     opacity: 1;
@@ -133,12 +201,67 @@ body {
   }
 }
 
+/* Motion layer: progressive enhancement — content is always visible.
+   When JS is present, sections drift up subtly on intersect; no opacity hide
+   so screenshots, crawlers, and no-JS never see a blank page. */
+.gs-reveal {
+  opacity: 1;
+  transform: none;
+}
+html.has-js .gs-reveal:not(.is-in) {
+  opacity: 1;
+  transform: translateY(12px);
+}
+html.has-js .gs-reveal.is-in {
+  animation: gs-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Control feedback: scale + focus ring only. Unlayered so it beats the
+   layered `transition-colors` in .btn-primary/.btn-ghost (hover tint
+   becomes instant, never animated). */
+.btn-primary,
+.btn-ghost,
+.gs-ctl {
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-primary:hover,
+.btn-ghost:hover,
+.gs-ctl:hover {
+  transform: scale(1.015);
+}
+.btn-primary:active,
+.btn-ghost:active,
+.gs-ctl:active {
+  transform: scale(0.98);
+}
+.btn-primary:focus-visible,
+.btn-ghost:focus-visible,
+.gs-ctl:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {
     animation-duration: 0.001s !important;
     transition-duration: 0.001s !important;
+  }
+  /* Motion collapses to none: entrances render in final state, controls static. */
+  .gs-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .btn-primary,
+  .btn-ghost,
+  .gs-ctl {
+    transition: none !important;
+    transform: none !important;
   }
 }
 
@@ -158,6 +281,8 @@ body {
     color: #0f172a !important;
   }
   .panel,
+  .tile,
+  .board-row,
   header.panel,
   article.panel {
     background: #fff !important;

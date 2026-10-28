@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
-import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import AssetList from "@/components/AssetList";
-import PipelineProgress, { type PipeStep } from "@/components/PipelineProgress";
+import type { PipeStep } from "@/components/PipelineProgress";
 import Timeline from "@/components/Timeline";
 import TranscriptPanel from "@/components/TranscriptPanel";
 import VideoOverlayPlayer from "@/components/VideoOverlayPlayer";
@@ -549,53 +548,64 @@ export default function InspectionPage() {
 
   return (
     <main className="min-h-screen bg-ink text-slate-100">
-      <div className="mx-auto max-w-6xl px-4 py-6">
-        <span className="micro-label">Inspection workspace</span>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">Session {sessionId.slice(0, 8)}</h1>
-        <p className="mt-1 font-mono text-xs text-slate-400">prompts: {prompts.join(", ")}</p>
-        {isSample && (
-          <p role="status" className="mt-2 inline-block rounded-md border border-amber-600/60 bg-amber-950/40 px-2 py-1 font-mono text-[11px] font-bold tracking-wider text-amber-300">
-            SAMPLE / CACHED — frozen demo data, not from your video. No inference was run for this session.
-          </p>
-        )}
-        <div className="mt-3 rounded-md border border-line bg-panel p-4">
-          <div className="flex flex-wrap items-center gap-3">
+      <div className="mx-auto max-w-6xl px-4 py-4">
+        <div className="space-y-1">
+          <header className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-panel px-3 py-3 sm:px-4">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-slate-100">Guided inspection — one click, correct order</p>
-              <p className="mt-0.5 text-xs text-slate-400">
-                Runs Track → Transcribe (skipped if no audio) → Match notes → Report + AI re-check. Completed billable stages are reused, not rerun. Manual actions below still work.
-              </p>
+              <p className="eyebrow">Inspection workspace</p>
+              <h1 className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[15px] font-bold tracking-tight">
+                <span>Session</span> <span className="rounded bg-ink px-1.5 py-0.5 font-mono text-xs text-steel">{sessionId.slice(0, 8)}</span>
+                <span className="hidden text-xs font-normal text-slate-500 sm:inline">· {prompts.join(", ")}</span>
+              </h1>
+              <p className="mt-1 text-xs text-slate-500 sm:hidden">prompts: {prompts.join(", ")}</p>
             </div>
-            <button
-              onClick={runGuidedInspection}
-              disabled={guidedRunning || tracking === "running" || reporting === "running" || transcribing === "running" || tagging === "running"}
-              className="rounded-md bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-40"
-            >
-              {guidedRunning ? "Running…" : objects.length > 0 || report ? "Continue guided run" : "Run inspection"}
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <a href="/dashboard" className="hidden text-xs font-semibold text-slate-400 hover:text-white sm:inline">Dashboard</a>
+              <button
+                onClick={runGuidedInspection}
+                disabled={guidedRunning || tracking === "running" || reporting === "running" || transcribing === "running" || tagging === "running"}
+                className="btn-primary shrink-0 !px-4 !py-2 text-[13px]"
+              >
+                {guidedRunning ? "Running…" : objects.length > 0 || report ? "Continue guided run" : "Run inspection"}
+              </button>
+            </div>
+          </header>
+          <div className="rounded-md border border-line bg-panel px-3 py-2.5 sm:px-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold text-slate-200">Guided inspection — one click, correct order</p>
+                <p className="mt-1 max-w-[62ch] text-xs leading-relaxed text-slate-400">
+                  Track → Transcribe (skipped if no audio) → Match notes → Report + AI re-check. Completed stages are reused, not rerun.
+                </p>
+              </div>
+              <span className="rounded-full border border-line bg-ink px-2 py-0.5 text-[11px] font-semibold text-slate-400">Manual controls still work →</span>
+            </div>
+            {(guidedMsg || guidedRunning) && (
+              <p role="status" aria-live="polite" className="mt-2 rounded bg-ink px-2 py-1.5 font-mono text-xs text-slate-300">{guidedMsg}</p>
+            )}
+            {!guidedRunning && (tracking === "error" || transcribing === "error" || tagging === "error" || reporting === "error") && (
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                A stage needs attention — fix it with Retry, then “Continue guided run” to resume. Valid earlier results are preserved.
+              </p>
+            )}
           </div>
-          {(guidedMsg || guidedRunning) && (
-            <p role="status" aria-live="polite" className="mt-2 text-xs text-slate-300">{guidedMsg}</p>
-          )}
-          {!guidedRunning && (tracking === "error" || transcribing === "error" || tagging === "error" || reporting === "error") && (
-            <p className="mt-2 text-xs text-slate-400">
-              A stage needs attention — fix it below with Retry, then press “Continue guided run” to resume without repeating completed stages. Valid earlier results are preserved.
+          {isSample && (
+            <p role="status" className="rounded-md border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs font-bold tracking-wide text-amber-300">
+              SAMPLE / CACHED — frozen demo data, not from your video. No inference was run for this session.
             </p>
           )}
-        </div>
-        <div className="mt-3">
-          <PipelineProgress steps={steps} />
+          <StageSpine steps={steps} />
         </div>
 
         {error && (
-          <p role="alert" className="mt-3 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300">
+          <p role="alert" className="mt-2 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-300">
             {error}{" "}
             <button onClick={startTracking} className="underline">Retry</button>
           </p>
         )}
 
         {persistNotice && (
-          <p className="mt-3 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+          <p className="mt-2 rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300">
             {persistNotice}
           </p>
         )}
@@ -625,107 +635,90 @@ export default function InspectionPage() {
 
         <WorkspaceSplit
           left={
-          <div>
+          <div className="space-y-2">
             <VideoOverlayPlayer src={src} objects={objects} fps={fps} seekTo={seekTo} selectedId={selectedId} substation={substation ?? undefined} onTime={setCurrentTime} />
-            <div className="mt-3">
-              <Timeline objects={objects} duration={duration} currentTime={currentTime} onSeek={setSeekTo} />
-            </div>
+            <Timeline objects={objects} duration={duration} currentTime={currentTime} onSeek={setSeekTo} loading={tracking === "running"} />
           </div>
           }
           right={
-          <div className="space-y-3">
+          <div className="space-y-2">
             <button
               onClick={startTracking}
               disabled={tracking === "running"}
-              className="w-full rounded-md bg-amber-500 px-4 py-2.5 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-40"
+              className="btn-primary w-full"
             >
-              {tracking === "running" ? `Tracking… ${progress}%` : objects.length > 0 ? "Re-run Tracking" : "Start Tracking"}
+              {tracking === "running" ? <span className="tabular">Tracking… {progress}%</span> : objects.length > 0 ? "Re-run Tracking" : "Start Tracking"}
             </button>
             {tracking === "running" && (
               <button
                 onClick={cancelTracking}
-                className="w-full rounded-md border border-line px-4 py-2 text-sm font-semibold text-slate-300 transition-colors hover:border-red-500 hover:text-red-300"
+                className="btn-ghost w-full"
               >
                 Cancel tracking
               </button>
             )}
             <div className="panel overflow-hidden">
-              <Tabs.Root defaultValue="assets" value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+              <Tabs.Root value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
                 <Tabs.List
                   className="flex border-b border-line"
                   aria-label="Workspace panels"
                 >
-                  {["assets", "transcript", "report"].map((key) => (
+                  {(["assets", "transcript", "report"] as const).map((key) => (
                     <Tabs.Trigger
                       key={key}
                       value={key}
-                      className="flex-1 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors text-slate-400 hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950"
+                      className="flex-1 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 transition-colors duration-[180ms] hover:text-white data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950"
                     >
                       {key}
                     </Tabs.Trigger>
                   ))}
                 </Tabs.List>
                 <Tabs.Content value="assets">
-                  <AnimatePresence>
-                    <motion.div
-                      key="assets"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      <AssetList objects={objects} selectedId={selectedId} thumbs={thumbs} onSelect={seekToObject} />
-                    </motion.div>
-                  </AnimatePresence>
+                  {tracking === "running" && objects.length === 0 ? (
+                    <div className="p-4" aria-busy="true" aria-label="Tracking assets">
+                      <div className="grid grid-cols-2 gap-2" aria-hidden>
+                        {[0, 1, 2, 3].map((i) => (
+                          <div key={i} className="aspect-video animate-pulse rounded-md bg-slate-800" />
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-400">
+                        <span className="tabular">Tracking… {progress}%</span> — assets appear here as they are detected.
+                      </p>
+                    </div>
+                  ) : (
+                    <AssetList objects={objects} selectedId={selectedId} thumbs={thumbs} onSelect={seekToObject} />
+                  )}
                 </Tabs.Content>
                 <Tabs.Content value="transcript">
-                  <AnimatePresence>
-                    <motion.div
-                      key="transcript"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      <TranscriptPanel
-                        segments={segments}
-                        busy={transcribing === "running"}
-                        error={transcribeError}
-                        stagedName={stagedAudio ? stagedAudio.name : null}
-                        tagged={tagged}
-                        tagBusy={tagging === "running"}
-                        tagError={tagError}
-                        onAudioReady={setStagedAudio}
-                        onTranscribe={transcribe}
-                        onTag={tagAssets}
-                        onSeek={setSeekTo}
-                        onAssetClick={highlightAsset}
-                        onEditSegment={editSegment}
-                      />
-                    </motion.div>
-                  </AnimatePresence>
+                  <TranscriptPanel
+                    segments={segments}
+                    busy={transcribing === "running"}
+                    error={transcribeError}
+                    stagedName={stagedAudio ? stagedAudio.name : null}
+                    tagged={tagged}
+                    tagBusy={tagging === "running"}
+                    tagError={tagError}
+                    onAudioReady={setStagedAudio}
+                    onTranscribe={transcribe}
+                    onTag={tagAssets}
+                    onSeek={setSeekTo}
+                    onAssetClick={highlightAsset}
+                    onEditSegment={editSegment}
+                  />
                 </Tabs.Content>
                 <Tabs.Content value="report">
-                  <AnimatePresence>
-                    <motion.div
-                      key="report"
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.18 }}
-                    >
-                      <div className="p-4">
+                  <div className="p-4">
                     <button
                       onClick={generateReport}
                       disabled={reporting === "running" || objects.length === 0}
-                      className="w-full rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-40"
+                      className="btn-primary w-full"
                     >
-                      {reporting === "running" ? `Analyzing… ${reportFound} defects` : report ? "Regenerate Report" : "Generate Report"}
+                      {reporting === "running" ? <span className="tabular">Analyzing… {reportFound} defects</span> : report ? "Regenerate Report" : "Generate Report"}
                     </button>
                     {reporting === "running" && (
                       <button
                         onClick={cancelReport}
-                        className="mt-2 w-full rounded-md border border-line px-4 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-red-500 hover:text-red-300"
+                        className="btn-ghost mt-2 w-full"
                       >
                         Cancel report
                       </button>
@@ -735,7 +728,7 @@ export default function InspectionPage() {
                       <div className="mt-3">
                         <div className="flex items-center gap-4">
                           <SeverityDonut stats={report.statistics} />
-                          <div className="font-mono text-xs text-slate-400">
+                          <div className="tabular text-xs text-slate-400">
                             <p>C <span className="text-red-400">{report.statistics.critical}</span> · H <span className="text-orange-400">{report.statistics.high}</span></p>
                             <p className="mt-1">M <span className="text-yellow-400">{report.statistics.medium}</span> · L <span className="text-green-400">{report.statistics.low}</span></p>
                             <p className="mt-1 text-slate-500">{report.defects.length} defects</p>
@@ -753,7 +746,7 @@ export default function InspectionPage() {
                             </li>
                           ))}
                         </ul>
-                        <a href={`/inspection/${sessionId}/report`} className="mt-3 block rounded-md bg-amber-500 px-4 py-2 text-center text-sm font-bold text-slate-950 transition-colors hover:bg-amber-400">
+                        <a href={`/inspection/${sessionId}/report`} className="btn-primary mt-3 block text-center">
                           Open full report
                         </a>
                       </div>
@@ -763,8 +756,6 @@ export default function InspectionPage() {
                       )
                     )}
                       </div>
-                    </motion.div>
-                  </AnimatePresence>
                 </Tabs.Content>
               </Tabs.Root>
             </div>
@@ -776,13 +767,63 @@ export default function InspectionPage() {
   );
 }
 
+const spineDot: Record<PipeStep["status"], string> = {
+  pending: "border-slate-700 bg-transparent",
+  running: "border-amber-500 bg-amber-500",
+  complete: "border-green-600 bg-green-600",
+  error: "border-red-600 bg-red-600",
+  skipped: "border-slate-700 bg-slate-800",
+  "needs-attention": "border-amber-500 bg-transparent",
+};
+
+const spineLabel: Record<PipeStep["status"], string> = {
+  pending: "text-slate-600",
+  running: "text-amber-300",
+  complete: "text-green-300",
+  error: "text-red-300",
+  skipped: "text-slate-500",
+  "needs-attention": "text-amber-200",
+};
+
+// Operate shell signature: a single bus spine (.node-line, solid var(--bus))
+// with one node per pipeline stage. No orchestrated entrance, no pulse —
+// status reads from node fill + label color, transitions capped at 180ms.
+function StageSpine({ steps }: { steps: PipeStep[] }) {
+  if (steps.length === 0) return null;
+  const errors = steps.flatMap((s) => (s.status === "error" && s.error ? [`${s.key}: ${s.error}`] : []));
+  return (
+    <nav aria-label="Pipeline progress" className="rounded-md border border-line bg-panel px-3 py-3">
+      <ol className="relative flex items-center gap-3 overflow-x-auto sm:gap-4">
+        <span aria-hidden className="node-line absolute inset-x-1 top-1/2 -translate-y-1/2" />
+        {steps.map((s) => (
+          <li key={s.key} className="relative flex shrink-0 items-center gap-1.5 bg-panel py-0.5 pl-0.5 pr-1">
+            <span aria-hidden className={`h-2.5 w-2.5 rounded-full border-2 transition-colors duration-[180ms] ${spineDot[s.status]}`} />
+            <span
+              aria-current={s.status === "running" ? "step" : undefined}
+              title={s.status === "error" && s.error ? s.error : undefined}
+              className={`tabular whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.12em] transition-colors duration-[180ms] ${spineLabel[s.status]}`}
+            >
+              {s.label}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {errors.length > 0 && (
+        <p role="alert" className="mt-2 rounded bg-red-950/50 px-2 py-1 text-xs text-red-300">
+          {errors.join(" · ")}
+        </p>
+      )}
+    </nav>
+  );
+}
+
 function SeverityBadge({ severity }: { severity: string }) {
   const color =
     severity === "CRITICAL" ? "bg-red-600" :
     severity === "HIGH" ? "bg-orange-500" :
     severity === "MEDIUM" ? "bg-yellow-500" : "bg-green-600";
   return (
-    <span className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-950 ${color}`}>
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold text-slate-950 ${color}`}>
       {severity}
     </span>
   );

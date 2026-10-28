@@ -84,7 +84,7 @@ export default function RawJsonPanel({
         <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
           Raw output
         </span>
-        <span className="font-mono text-xs text-slate-500">
+        <span className="tabular text-xs text-slate-500">
           {json.length} bytes
         </span>
         <ChevronDown
